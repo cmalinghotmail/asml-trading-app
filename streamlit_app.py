@@ -134,6 +134,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Compactere layout — verwijder Streamlit's standaard witruimte
+st.markdown("""
+<style>
+.block-container { padding-top: 0.6rem !important; padding-bottom: 0.25rem !important; }
+[data-testid="stVerticalBlock"] { gap: 0.3rem; }
+h1 { font-size: 1.5rem !important; line-height: 1.2 !important; margin-bottom: 0 !important; }
+hr { margin: 0.25rem 0 !important; }
+[data-testid="stMetric"] { padding: 0 !important; }
+[data-testid="stVerticalBlockBorderWrapper"] > div { padding: 0.5rem 0.75rem !important; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.2rem; }
+</style>
+""", unsafe_allow_html=True)
+
 # ---------------------------------------------------------------------------
 # Engine singleton — lives in session_state so it survives Streamlit reruns
 # ---------------------------------------------------------------------------
@@ -467,52 +480,39 @@ if fig:
 else:
     st.info("Nog geen candle data. Druk **Start** in de zijbalk.")
 
-st.divider()
-
 # ---------------------------------------------------------------------------
-# Signals — prominent bordered table
+# Signals — compact in sidebar
 # ---------------------------------------------------------------------------
-n_sig = len(state["signals"])
-
-with st.container(border=True):
-    st.subheader(f"Signalen  ({n_sig})")
-
+with st.sidebar:
+    st.divider()
+    n_sig = len(state["signals"])
+    st.markdown(f"**Signalen ({n_sig})**")
     if state["signals"]:
         rows = []
-        for s in reversed(state["signals"][-20:]):
-            turbo_data = s.get("turbo", {})
+        for s in reversed(state["signals"][-10:]):
             rows.append({
-                "Tijd":      str(s.get("time", ""))[:19].replace("T", " "),
-                "Setup":     s.get("meta", {}).get("setup_name", ""),
-                "Side":      s.get("side", ""),
-                "Entry":     round(float(s["entry"]), 2),
-                "SL":        round(float(s["sl"]), 2),
-                "TP":        round(float(s["tp"]), 2),
-                "Turbo SL":  round(float(turbo_data["turbo_sl_price"]), 2)
-                             if "turbo_sl_price" in turbo_data else None,
-                "Turbo TP":  round(float(turbo_data["turbo_tp_price"]), 2)
-                             if "turbo_tp_price" in turbo_data else None,
+                "Tijd":  str(s.get("time", ""))[:16].replace("T", " "),
+                "Side":  s.get("side", ""),
+                "Entry": round(float(s["entry"]), 2),
+                "SL":    round(float(s["sl"]), 2),
+                "TP":    round(float(s["tp"]), 2),
             })
-
-        df_signals = pd.DataFrame(rows)
+        df_sig = pd.DataFrame(rows)
         st.dataframe(
-            df_signals,
+            df_sig,
             use_container_width=True,
             hide_index=True,
-            height=min(38 + len(rows) * 35, 420),
+            height=min(38 + len(rows) * 35, 320),
             column_config={
-                "Tijd":      st.column_config.TextColumn("Tijd",     width="medium"),
-                "Setup":     st.column_config.TextColumn("Setup",    width="medium"),
-                "Side":      st.column_config.TextColumn("Side",     width="small"),
-                "Entry":     st.column_config.NumberColumn("Entry",    format="€ %.2f"),
-                "SL":        st.column_config.NumberColumn("SL",       format="€ %.2f"),
-                "TP":        st.column_config.NumberColumn("TP",       format="€ %.2f"),
-                "Turbo SL":  st.column_config.NumberColumn("Turbo SL", format="€ %.2f"),
-                "Turbo TP":  st.column_config.NumberColumn("Turbo TP", format="€ %.2f"),
+                "Tijd":  st.column_config.TextColumn("Tijd",  width="small"),
+                "Side":  st.column_config.TextColumn("Side",  width="small"),
+                "Entry": st.column_config.NumberColumn("Entry", format="€%.0f"),
+                "SL":    st.column_config.NumberColumn("SL",    format="€%.0f"),
+                "TP":    st.column_config.NumberColumn("TP",    format="€%.0f"),
             },
         )
     else:
-        st.info("Nog geen signalen gedetecteerd. Start de engine om signalen te ontvangen.")
+        st.caption("Nog geen signalen.")
 
 # ---------------------------------------------------------------------------
 # Auto-refresh when engine is running
