@@ -1,0 +1,52 @@
+# ============================================================
+# ASML Trading App — config template
+# Kopieer dit bestand naar config.yaml en vul je eigen waarden in.
+# config.yaml staat in .gitignore en wordt NOOIT gecommit.
+# ============================================================
+
+# Saxo Bank API credentials (Fase 2 — live koersdata)
+saxo:
+  client_id: "REPLACE_WITH_CLIENT_ID"
+  client_secret: "REPLACE_WITH_SECRET"
+  account_id: "REPLACE_WITH_ACCOUNT_ID"
+
+# Onderliggend aandeel
+underlying_symbol: ASML
+
+# Turbo product instellingen
+turbo:
+  leverage: 3.50           # Standaard leverage (alleen voor reporting)
+  long_isin: "NL0000000000"
+  short_isin: "NL0000000001"
+  ratio: 10                # Product ratio: 1, 10 of 100
+
+# Strategieparameters
+setups:
+  breakout:
+    lookback: 20
+    vol_ma: 20
+    vol_mult: 1.5
+    tp_ratio: 2.0
+
+  morning_gap:
+    start: "08:05"
+    end: "09:00"
+    gap_min: 10.0
+    vol_min: 100
+    tp_ratio: 1.5
+    sl_buffer: 0.0
+    lookback: 5
+
+# Demo / test instellingen
+demo_setup: morning_gap
+demo_prev_close: 1210.0
+demo_limit: 500
+demo_force_window: true    # true = tijdvenster uitgeschakeld (voor testen buiten markturen)
+
+# Fase: 'signals' of 'orders' (orders nog niet geïmplementeerd)
+phase: signals
+
+# Legacy opties (niet gebruikt in Streamlit versie)
+manual_turbo: false
+manual_turbo_price: false
+gui_mode: false

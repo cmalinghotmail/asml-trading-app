@@ -1,0 +1,15 @@
+[server]
+# Luister op alle interfaces zodat je de app van buitenaf kunt bereiken
+address = "0.0.0.0"
+port = 8501
+# Schakel bestandswijziging-watcher uit op de server (bespaart CPU)
+fileWatcherType = "none"
+# Geen browser automatisch openen op de server
+headless = true
+
+[theme]
+base = "dark"
+primaryColor = "#00a6ed"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#1a1f2e"
+textColor = "#fafafa"
