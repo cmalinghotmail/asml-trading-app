@@ -137,12 +137,11 @@ st.set_page_config(
 # Compactere layout — verwijder Streamlit's standaard witruimte
 st.markdown("""
 <style>
-.block-container { padding-top: 0.6rem !important; padding-bottom: 0.25rem !important; }
+.block-container { padding-top: 0.5rem !important; padding-bottom: 0.25rem !important; }
 [data-testid="stVerticalBlock"] { gap: 0.3rem; }
-h1 { font-size: 1.5rem !important; line-height: 1.2 !important; margin-bottom: 0 !important; }
 hr { margin: 0.25rem 0 !important; }
-[data-testid="stMetric"] { padding: 0 !important; }
 [data-testid="stVerticalBlockBorderWrapper"] > div { padding: 0.5rem 0.75rem !important; }
+section[data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem !important; }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.2rem; }
 </style>
 """, unsafe_allow_html=True)
@@ -188,15 +187,6 @@ with st.sidebar:
         index=current_idx,
     )
     setup_choice = setup_keys[setup_labels.index(setup_label)]
-
-    prev_close = st.number_input(
-        "Vorige slotkoers ASML (EUR)",
-        min_value=100.0,
-        max_value=9000.0,
-        value=float(engine.prev_close),
-        step=0.5,
-        format="%.2f",
-    )
 
     leverage = st.number_input(
         "Leverage",
@@ -260,7 +250,7 @@ with st.sidebar:
             st.session_state.pop(_k, None)
         engine.start(
             setup_name=setup_choice,
-            prev_close=float(prev_close),
+            prev_close=float(engine.prev_close),
             leverage=float(leverage),
             ratio=float(ratio),
         )
@@ -281,38 +271,35 @@ state = engine.get_state()
 # ---------------------------------------------------------------------------
 # Header — title + live price inline
 # ---------------------------------------------------------------------------
-hdr_title, hdr_price = st.columns([3, 1], gap="large")
+status_icons = {"running": "🟢", "stopped": "⚫", "starting": "🟡", "error": "🔴"}
+icon = status_icons.get(state["status"], "⚫")
 
-with hdr_title:
-    st.title("ASML Trading Monitor")
-    status_icons = {"running": "🟢", "stopped": "⚫", "starting": "🟡", "error": "🔴"}
-    icon = status_icons.get(state["status"], "⚫")
-    st.markdown(
-        f"**Status:** {icon} `{state['status'].upper()}`  &nbsp;|&nbsp;  "
-        f"**Candles:** {state['candle_count']}  &nbsp;|&nbsp;  "
-        f"**Setup:** `{state['setup_name']}`"
+col_hdr = st.columns([3, 2])
+with col_hdr[0]:
+    st.markdown("#### ASML Trading Monitor")
+    st.caption(
+        f"Status: {icon} {state['status'].upper()} &nbsp;|&nbsp; "
+        f"Candles: {state['candle_count']} &nbsp;|&nbsp; "
+        f"Setup: {state['setup_name']}"
     )
-
-with hdr_price:
+with col_hdr[1]:
     if state["current_price"] is not None:
         price = state["current_price"]
         pc    = state["prev_close"]
         diff  = price - pc
         diff_pct = (diff / pc) * 100 if pc else 0.0
         sign = "+" if diff >= 0 else ""
-        st.metric(
-            label="ASML Live Koers",
-            value=f"€ {price:,.2f}",
-            delta=f"{sign}{diff:.2f} ({sign}{diff_pct:.2f}%)",
+        color = "#26a69a" if diff >= 0 else "#ef5350"
+        st.markdown(
+            f"<span style='font-size:1.3rem; font-weight:700'>€ {price:,.2f}</span>"
+            f"&nbsp; <span style='color:{color}; font-size:0.85rem'>{sign}{diff:.2f} ({sign}{diff_pct:.2f}%)</span>",
+            unsafe_allow_html=True,
         )
         if state["current_candle"]:
             c = state["current_candle"]
-            st.caption(
-                f"O: {c['open']:.2f}  H: {c['high']:.2f}  "
-                f"L: {c['low']:.2f}  Vol: {c['volume']}"
-            )
+            st.caption(f"O:{c['open']:.2f} H:{c['high']:.2f} L:{c['low']:.2f} Vol:{c['volume']}")
     else:
-        st.info("Wachten op data…  \nDruk **Start** in de zijbalk.")
+        st.caption("Wachten op data… Druk **Start** in de zijbalk.")
 
 if state["error_msg"]:
     st.error(f"Fout in trading engine: {state['error_msg']}")
@@ -385,6 +372,20 @@ with sltp_col:
         _tp_dist = chart_tp - default_entry
         st.caption(f"Afstand entry: {_tp_dist:+.2f} EUR")
 
+        # Signalen compact onder TP
+        if state["signals"]:
+            st.divider()
+            st.markdown("**Signalen**")
+            for s in reversed(state["signals"][-5:]):
+                _s_icon = "🟢" if s.get("side") == "LONG" else "🔴"
+                _s_t = str(s.get("time", ""))[:16].replace("T", " ")
+                st.caption(
+                    f"{_s_icon} {_s_t} &nbsp; "
+                    f"E:{float(s['entry']):.0f} &nbsp;"
+                    f"SL:{float(s['sl']):.0f} &nbsp;"
+                    f"TP:{float(s['tp']):.0f}"
+                )
+
 # --- Right: Turbo Calculator — all values from sidebar settings (display-only) ---
 # Lees waarden rechtstreeks uit instellingen (sidebar)
 _calc_side        = default_side
@@ -408,9 +409,7 @@ with turbo_col:
             rc.markdown(str(value))
 
         # Display-only input rows (values from sidebar)
-        _drow("Side",         _calc_side)
         _drow("Turbo entry",  f"€ {_calc_turbo_price:.2f}")
-        _drow("Ratio",        f"{_calc_ratio:.0f}")
 
         # Compute turbo translation
         _dummy = {
@@ -479,40 +478,6 @@ if fig:
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Nog geen candle data. Druk **Start** in de zijbalk.")
-
-# ---------------------------------------------------------------------------
-# Signals — compact in sidebar
-# ---------------------------------------------------------------------------
-with st.sidebar:
-    st.divider()
-    n_sig = len(state["signals"])
-    st.markdown(f"**Signalen ({n_sig})**")
-    if state["signals"]:
-        rows = []
-        for s in reversed(state["signals"][-10:]):
-            rows.append({
-                "Tijd":  str(s.get("time", ""))[:16].replace("T", " "),
-                "Side":  s.get("side", ""),
-                "Entry": round(float(s["entry"]), 2),
-                "SL":    round(float(s["sl"]), 2),
-                "TP":    round(float(s["tp"]), 2),
-            })
-        df_sig = pd.DataFrame(rows)
-        st.dataframe(
-            df_sig,
-            use_container_width=True,
-            hide_index=True,
-            height=min(38 + len(rows) * 35, 320),
-            column_config={
-                "Tijd":  st.column_config.TextColumn("Tijd",  width="small"),
-                "Side":  st.column_config.TextColumn("Side",  width="small"),
-                "Entry": st.column_config.NumberColumn("Entry", format="€%.0f"),
-                "SL":    st.column_config.NumberColumn("SL",    format="€%.0f"),
-                "TP":    st.column_config.NumberColumn("TP",    format="€%.0f"),
-            },
-        )
-    else:
-        st.caption("Nog geen signalen.")
 
 # ---------------------------------------------------------------------------
 # Auto-refresh when engine is running
