@@ -21,6 +21,11 @@ from turbo.translate import TurboTranslator
 
 
 def _load_config(path="config.yaml"):
+    import os
+    if not os.path.exists(path):
+        # Fallback voor Streamlit Community Cloud (geen config.yaml in repo)
+        fallback = os.path.join(os.path.dirname(path) or ".", "config.example.yaml")
+        path = fallback
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
