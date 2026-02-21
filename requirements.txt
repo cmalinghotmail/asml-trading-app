@@ -4,3 +4,5 @@ pyyaml
 openpyxl
 plotly>=5.0.0
 streamlit>=1.32.0
+yfinance>=0.2.0
+pytz

@@ -10,6 +10,7 @@ import time
 import yaml
 
 from data.mock_saxo import MockSaxoFeed
+from data.yfinance_feed import YFinanceFeed
 from strategies.asml_setups import (
     MorningGapFill,
     MorningMomentum,
@@ -58,6 +59,8 @@ class TradingEngine:
         self.prev_close = float(self.cfg.get("demo_prev_close", 1210.0))
         self.leverage = float(turbo_cfg.get("leverage", 3.50))
         self.ratio = float(turbo_cfg.get("ratio", 10))
+        self.ticker = self.cfg.get("underlying_symbol", "ASML.AS")
+        self.feed_mode = "mock"   # "mock" of "live"
 
         # Shared state (always access via get_state() or inside _lock)
         self.current_price: float | None = None
@@ -72,7 +75,8 @@ class TradingEngine:
     # Public API
     # ------------------------------------------------------------------
 
-    def start(self, setup_name=None, prev_close=None, leverage=None, ratio=None):
+    def start(self, setup_name=None, prev_close=None, leverage=None, ratio=None,
+              ticker=None, feed_mode=None):
         """(Re)start the trading loop with optional new parameters."""
         # Stop and wait for any running thread first
         if self._thread and self._thread.is_alive():
@@ -88,6 +92,10 @@ class TradingEngine:
             self.leverage = float(leverage)
         if ratio is not None:
             self.ratio = float(ratio)
+        if ticker is not None:
+            self.ticker = ticker
+        if feed_mode is not None:
+            self.feed_mode = feed_mode
 
         # Reset state
         with self._lock:
@@ -127,6 +135,8 @@ class TradingEngine:
                 "prev_close": self.prev_close,
                 "leverage": self.leverage,
                 "ratio": self.ratio,
+                "ticker": self.ticker,
+                "feed_mode": self.feed_mode,
             }
 
     # ------------------------------------------------------------------
@@ -171,11 +181,13 @@ class TradingEngine:
 
     def _run_loop(self):
         cfg = self.cfg
-        symbol = cfg.get("underlying_symbol", "ASML")
 
-        # Start the mock feed ~1% below prev_close to produce a gap-down
-        start_price = round(self.prev_close * 0.99, 2)
-        feed = MockSaxoFeed(symbol=symbol, start_price=start_price)
+        if self.feed_mode == "live":
+            feed = YFinanceFeed(ticker=self.ticker)
+        else:
+            # Demo: random-walk feed vanaf ~1% onder prev_close
+            start_price = round(self.prev_close * 0.99, 2)
+            feed = MockSaxoFeed(symbol=self.ticker, start_price=start_price)
 
         strategy = self._build_strategy()
 
@@ -220,7 +232,8 @@ class TradingEngine:
                         if len(self.signals) > self.MAX_SIGNALS:
                             self.signals = self.signals[-self.MAX_SIGNALS:]
 
-                time.sleep(0.1)  # 100 ms per candle in demo mode
+                if self.feed_mode == "mock":
+                    time.sleep(0.1)  # 100 ms per candle in demo mode
 
         except Exception as exc:
             with self._lock:

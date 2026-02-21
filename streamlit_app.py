@@ -188,6 +188,20 @@ with st.sidebar:
     )
     setup_choice = setup_keys[setup_labels.index(setup_label)]
 
+    st.divider()
+    ticker = st.text_input(
+        "Ticker",
+        value=engine.ticker,
+        help="Euronext: ASML.AS  |  Nasdaq: ASML  |  voorbeeld: NVDA, RDSA.AS",
+    )
+    feed_mode = st.radio(
+        "Data bron",
+        options=["mock", "live"],
+        index=0 if engine.feed_mode == "mock" else 1,
+        format_func=lambda x: "Demo (mock data)" if x == "mock" else "Live (yfinance)",
+        horizontal=True,
+    )
+
     leverage = st.number_input(
         "Leverage",
         min_value=1.0,
@@ -253,6 +267,8 @@ with st.sidebar:
             prev_close=float(engine.prev_close),
             leverage=float(leverage),
             ratio=float(ratio),
+            ticker=ticker.strip(),
+            feed_mode=feed_mode,
         )
         st.rerun()
 
@@ -277,8 +293,10 @@ icon = status_icons.get(state["status"], "⚫")
 col_hdr = st.columns([3, 2])
 with col_hdr[0]:
     st.markdown("#### ASML Trading Monitor")
+    _feed_label = "live" if state.get("feed_mode") == "live" else "demo"
     st.caption(
         f"Status: {icon} {state['status'].upper()} &nbsp;|&nbsp; "
+        f"{state.get('ticker', 'ASML.AS')} [{_feed_label}] &nbsp;|&nbsp; "
         f"Candles: {state['candle_count']} &nbsp;|&nbsp; "
         f"Setup: {state['setup_name']}"
     )
