@@ -5,6 +5,9 @@ and stores detected signals in a thread-safe shared state that the
 Streamlit UI can read on every rerun.
 """
 
+import datetime
+import json
+import os
 import threading
 import time
 import yaml
@@ -19,6 +22,51 @@ from strategies.asml_setups import (
 )
 from strategy.breakout import BreakoutStrategy
 from turbo.translate import TurboTranslator
+
+
+_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "candle_cache.json")
+_SAVE_INTERVAL_MOCK = 20   # elke 20 candles opslaan in mock-modus (= ~2 sec)
+_SAVE_INTERVAL_LIVE = 1    # elke candle opslaan in live-modus (= ~1 min interval)
+
+
+def _save_cache(path, ticker, feed_mode, candle_history, signals, candle_count):
+    """Schrijf candle-history naar JSON. Fouten worden stilzwijgend genegeerd."""
+    try:
+        payload = {
+            "date":          datetime.date.today().isoformat(),
+            "ticker":        ticker,
+            "feed_mode":     feed_mode,
+            "candle_count":  candle_count,
+            "candle_history": candle_history,
+            "signals":       signals,
+        }
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+    except OSError:
+        pass
+
+
+def _load_cache(path, ticker):
+    """Laad cache als datum én ticker overeenkomen met vandaag.
+
+    Geeft (candle_history, signals, candle_count, feed_mode) of None.
+    feed_mode wordt meegeladen zodat de UI de juiste radio-default toont.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+    if (data.get("date") == datetime.date.today().isoformat()
+            and data.get("ticker") == ticker
+            and data.get("candle_history")):
+        return (
+            data["candle_history"],
+            data.get("signals", []),
+            int(data.get("candle_count", 0)),
+            data.get("feed_mode", "mock"),
+        )
+    return None
 
 
 def _load_config(path="config.yaml"):
@@ -71,6 +119,16 @@ class TradingEngine:
         self.status: str = "stopped"
         self.error_msg: str | None = None
 
+        # Herstel vorige sessie uit cache (overleeft browser-refresh)
+        cached = _load_cache(_CACHE_FILE, self.ticker)
+        if cached:
+            ch, sigs, cnt, fm = cached
+            self.candle_history = ch
+            self.signals       = sigs
+            self.candle_count  = cnt
+            self.feed_mode     = fm          # herstel ook feed-modus
+            self.current_price = float(ch[-1]["close"])
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -97,7 +155,9 @@ class TradingEngine:
         if feed_mode is not None:
             self.feed_mode = feed_mode
 
-        # Reset state
+        # Reset state + invalideer cache zodat een directe refresh geen
+        # verouderde data toont
+        _save_cache(_CACHE_FILE, self.ticker, self.feed_mode, [], [], 0)
         with self._lock:
             self.signals = []
             self.candle_history = []
@@ -200,6 +260,7 @@ class TradingEngine:
 
         _buf: list = []
         CHART_CANDLES = 100
+        _save_interval = _SAVE_INTERVAL_LIVE if self.feed_mode == "live" else _SAVE_INTERVAL_MOCK
 
         try:
             for candle in feed.stream_candles():
@@ -232,6 +293,15 @@ class TradingEngine:
                         if len(self.signals) > self.MAX_SIGNALS:
                             self.signals = self.signals[-self.MAX_SIGNALS:]
 
+                # Periodiek opslaan naar cache
+                if self.candle_count % _save_interval == 0:
+                    with self._lock:
+                        _snap_h = list(self.candle_history)
+                        _snap_s = list(self.signals)
+                        _snap_c = self.candle_count
+                    _save_cache(_CACHE_FILE, self.ticker, self.feed_mode,
+                                _snap_h, _snap_s, _snap_c)
+
                 if self.feed_mode == "mock":
                     time.sleep(0.1)  # 100 ms per candle in demo mode
 
@@ -240,6 +310,15 @@ class TradingEngine:
                 self.status = "error"
                 self.error_msg = str(exc)
             return
+
+        finally:
+            # Altijd een finale save bij stoppen (normaal of via Stop-knop)
+            with self._lock:
+                _snap_h = list(self.candle_history)
+                _snap_s = list(self.signals)
+                _snap_c = self.candle_count
+            _save_cache(_CACHE_FILE, self.ticker, self.feed_mode,
+                        _snap_h, _snap_s, _snap_c)
 
         with self._lock:
             if self.status != "error":

@@ -162,11 +162,6 @@ engine = _get_engine()
 # Sidebar — configuration & controls
 # ---------------------------------------------------------------------------
 
-def _sync_turbo_to_calc():
-    """Copy sidebar turbo entry price to calculator key."""
-    st.session_state["chart_turbo_price"] = st.session_state["sidebar_turbo_entry"]
-
-
 with st.sidebar:
     st.title("Instellingen")
 
@@ -230,17 +225,6 @@ with st.sidebar:
         key="turbo_isin",
         placeholder="bijv. NL0000000000",
     )
-    st.number_input(
-        "Turbo entry prijs (EUR)",
-        min_value=0.01,
-        max_value=999.0,
-        value=5.00,
-        step=0.01,
-        format="%.2f",
-        key="sidebar_turbo_entry",
-        on_change=_sync_turbo_to_calc,
-        help="Wordt direct overgenomen in de Turbo Calculator",
-    )
 
     st.divider()
 
@@ -260,7 +244,7 @@ with st.sidebar:
         )
 
     if start_clicked:
-        for _k in ("chart_sl", "chart_tp"):
+        for _k in ("chart_sl", "chart_tp", "chart_asml_entry"):
             st.session_state.pop(_k, None)
         engine.start(
             setup_name=setup_choice,
@@ -354,6 +338,31 @@ with sltp_col:
         h_val.markdown("**Prijs (EUR)**")
         st.divider()
 
+        # ASML Entry row — primaire input; turbo entry wordt hieruit berekend
+        ae_lbl, ae_val = st.columns([1, 2])
+        ae_lbl.markdown("📍 **ASML Entry**")
+        with ae_val:
+            chart_asml_entry = st.number_input(
+                "ASML Entry",
+                min_value=ni_min,
+                max_value=ni_max,
+                value=default_entry,
+                step=0.5,
+                format="%.2f",
+                key="chart_asml_entry",
+                label_visibility="collapsed",
+            )
+
+        # Turbo entry row — berekend uit ASML entry + leverage + ratio
+        te_lbl, te_val = st.columns([1, 2])
+        te_lbl.markdown("🔵 **Turbo entry**")
+        _lev = float(leverage)
+        _rat = float(ratio)
+        chart_turbo_entry = round(chart_asml_entry / (_lev * _rat), 2) if _lev > 0 and _rat > 0 else 0.0
+        te_val.markdown(f"**€ {chart_turbo_entry:.2f}**")
+
+        st.divider()
+
         # SL row
         sl_lbl, sl_val = st.columns([1, 2])
         sl_lbl.markdown("🔴 **Stop Loss**")
@@ -368,7 +377,7 @@ with sltp_col:
                 key="chart_sl",
                 label_visibility="collapsed",
             )
-        _sl_dist = default_entry - chart_sl
+        _sl_dist = chart_asml_entry - chart_sl
         st.caption(f"Afstand entry: {_sl_dist:+.2f} EUR")
 
         st.divider()
@@ -387,7 +396,7 @@ with sltp_col:
                 key="chart_tp",
                 label_visibility="collapsed",
             )
-        _tp_dist = chart_tp - default_entry
+        _tp_dist = chart_tp - chart_asml_entry
         st.caption(f"Afstand entry: {_tp_dist:+.2f} EUR")
 
         # Signalen compact onder TP
@@ -404,10 +413,9 @@ with sltp_col:
                     f"TP:{float(s['tp']):.0f}"
                 )
 
-# --- Right: Turbo Calculator — all values from sidebar settings (display-only) ---
-# Lees waarden rechtstreeks uit instellingen (sidebar)
+# --- Right: Turbo Calculator — all values from main block + sidebar settings ---
 _calc_side        = default_side
-_calc_turbo_price = st.session_state.get("sidebar_turbo_entry", 5.00)
+_calc_turbo_price = chart_turbo_entry
 _calc_ratio       = float(ratio)
 
 with turbo_col:
@@ -426,28 +434,26 @@ with turbo_col:
             lc.markdown(f"**{label}**")
             rc.markdown(str(value))
 
-        # Display-only input rows (values from sidebar)
-        _drow("Turbo entry",  f"€ {_calc_turbo_price:.2f}")
-
-        # Compute turbo translation
+        # Compute turbo translation — alles gebaseerd op chart_asml_entry + leverage-afgeleide turbo
         _dummy = {
             "side":  _calc_side,
-            "entry": default_entry,
+            "entry": chart_asml_entry,
             "sl":    chart_sl,
             "tp":    chart_tp,
         }
         result = TurboTranslator({"leverage": state["leverage"]}).translate(
             _dummy,
-            asml_price=default_entry,
-            turbo_price=_calc_turbo_price,
+            asml_price=chart_asml_entry,
+            turbo_price=_calc_turbo_price,   # = chart_asml_entry / (leverage * ratio)
             ratio=_calc_ratio,
         )
         turbo_sl_price = result.get("turbo_sl_price")
         turbo_tp_price = result.get("turbo_tp_price")
+        _financing     = result.get("financing")
 
         st.divider()
 
-        # Result rows — styled like SL/TP table (🔴/🟢)
+        # Result rows
         if turbo_sl_price is not None:
             _sl_d   = abs(_calc_turbo_price - turbo_sl_price)
             _tp_d   = abs(turbo_tp_price - _calc_turbo_price)
@@ -459,13 +465,13 @@ with turbo_col:
                 ("🔴 Turbo SL",  f"**€ {turbo_sl_price:.2f}**  *({_sl_pct:+.1f}% / −{_sl_d:.2f})*"),
                 ("🟢 Turbo TP",  f"**€ {turbo_tp_price:.2f}**  *({_tp_pct:+.1f}% / +{_tp_d:.2f})*"),
                 ("R/R",          f"**{_rr:.2f}**"),
-                ("Financiering", f"€ {result.get('financing', 0):.2f}"),
+                ("Financiering", f"€ {_financing:.2f}"),
             ]:
                 lc, rc = st.columns([1, 2])
                 lc.markdown(f"**{_lbl}**")
                 rc.markdown(_val)
         else:
-            st.info("Vul een turbo entry prijs in via de instellingen.")
+            st.info("Geen berekening mogelijk — controleer leverage en ratio.")
 
 # ---------------------------------------------------------------------------
 # Candlestick chart — full width, uses session_state turbo price for annotations
@@ -474,17 +480,17 @@ _prev_turbo_price = _calc_turbo_price
 _prev_ratio       = _calc_ratio
 _prev_side        = _calc_side
 
-_dummy_chart = {"side": _prev_side, "entry": default_entry, "sl": chart_sl, "tp": chart_tp}
+_dummy_chart = {"side": _prev_side, "entry": chart_asml_entry, "sl": chart_sl, "tp": chart_tp}
 _result_chart = TurboTranslator({"leverage": state["leverage"]}).translate(
     _dummy_chart,
-    asml_price=default_entry,
+    asml_price=chart_asml_entry,
     turbo_price=_prev_turbo_price,
     ratio=_prev_ratio,
 )
 
 fig = _build_chart(
     candles=candles,
-    entry_val=default_entry,
+    entry_val=chart_asml_entry,
     sl_val=chart_sl,
     tp_val=chart_tp,
     signals=state["signals"],
@@ -493,7 +499,14 @@ fig = _build_chart(
     turbo_entry=_prev_turbo_price,
 )
 if fig:
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={
+            "editable": False,
+            "edits": {"shapePosition": True},
+        },
+    )
 else:
     st.info("Nog geen candle data. Druk **Start** in de zijbalk.")
 
