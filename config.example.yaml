@@ -11,14 +11,28 @@ saxo:
   account_id: "REPLACE_WITH_ACCOUNT_ID"
 
 # Onderliggend aandeel
-underlying_symbol: ASML
+underlying_symbol: ASML.AS
 
-# Turbo product instellingen
+# Turbo product instellingen (algemeen / legacy)
 turbo:
-  leverage: 3.50           # Standaard leverage (alleen voor reporting)
+  leverage: 3.50
   long_isin: "NL0000000000"
   short_isin: "NL0000000001"
-  ratio: 10                # Product ratio: 1, 10 of 100
+  ratio: 100
+
+# Turbo LONG product (box-strategie)
+turbo_long:
+  name: "TURBO LONG ASML"
+  isin: "NL0000000000"
+  leverage: 3.50
+  ratio: 100
+
+# Turbo SHORT product (box-strategie)
+turbo_short:
+  name: "TURBO SHORT ASML"
+  isin: "NL0000000001"
+  leverage: 3.50
+  ratio: 100
 
 # Strategieparameters
 setups:
@@ -38,7 +52,7 @@ setups:
     lookback: 5
 
 # Demo / test instellingen
-demo_setup: morning_gap
+demo_setup: prev_day_box
 demo_prev_close: 1210.0
 demo_limit: 500
 demo_force_window: true    # true = tijdvenster uitgeschakeld (voor testen buiten markturen)

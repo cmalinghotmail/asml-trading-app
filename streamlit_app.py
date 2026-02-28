@@ -10,6 +10,7 @@ Access from any device on the same network (or server):
 import time
 import sys
 import os
+import datetime
 import pandas as pd
 import plotly.graph_objects as go
 
@@ -126,6 +127,120 @@ def _build_chart(candles, entry_val, sl_val, tp_val, signals,
 
 
 # ---------------------------------------------------------------------------
+# Box strategie helpers
+# ---------------------------------------------------------------------------
+
+def _fetch_box_levels(ticker: str) -> dict | None:
+    """Haal vorige volledige handelsdag High/Low/Mid op via yfinance.
+
+    Weekend-afhandeling is automatisch: yfinance retourneert vrijdag als
+    de meest recente completed trading day wanneer het weekend is.
+    """
+    import yfinance as yf
+    today = datetime.date.today()
+    try:
+        df = yf.download(ticker, period="5d", interval="1d",
+                         auto_adjust=True, progress=False)
+        if df.empty:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        # Verwijder vandaag als die al in de data zit (partial trading day)
+        if df.index[-1].date() >= today:
+            df = df.iloc[:-1]
+        if df.empty:
+            return None
+        row  = df.iloc[-1]
+        high = round(float(row["High"]), 2)
+        low  = round(float(row["Low"]),  2)
+        return {
+            "date": df.index[-1].date().isoformat(),
+            "high": high,
+            "low":  low,
+            "mid":  round((high + low) / 2, 2),
+        }
+    except Exception:
+        return None
+
+
+def _render_box_zone(col, side, key_pfx, def_entry, def_sl, def_tp, lev, rat,
+                     turbo_naam="", turbo_isin=""):
+    """Render één box-zone (LONG of SHORT) met ASML-inputs en turbo-output."""
+    icon  = "🟢" if side == "LONG" else "🔴"
+    title = "LONG zone  —  instap onderkant" if side == "LONG" else "SHORT zone  —  instap bovenkant"
+    with col:
+        with st.container(border=True):
+            st.markdown(f"**{icon} {title}**")
+            _product_label = "  |  ".join(filter(None, [turbo_naam, turbo_isin]))
+            if _product_label:
+                st.caption(_product_label)
+            st.divider()
+
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                entry = st.number_input(
+                    "ASML Entry", min_value=100.0, max_value=9000.0,
+                    value=def_entry, step=0.5, format="%.2f",
+                    key=f"{key_pfx}_entry",
+                )
+            with c2:
+                sl = st.number_input(
+                    "ASML SL", min_value=100.0, max_value=9000.0,
+                    value=def_sl, step=0.5, format="%.2f",
+                    key=f"{key_pfx}_sl",
+                )
+            with c3:
+                tp = st.number_input(
+                    "ASML TP", min_value=100.0, max_value=9000.0,
+                    value=def_tp, step=0.5, format="%.2f",
+                    key=f"{key_pfx}_tp",
+                )
+
+            if side == "LONG":
+                _sl_dist = round(entry - sl, 2)
+                _tp_dist = round(tp - entry, 2)
+            else:
+                _sl_dist = round(sl - entry, 2)
+                _tp_dist = round(entry - tp, 2)
+            st.caption(f"SL afstand: {_sl_dist:+.2f} EUR  |  TP afstand: {_tp_dist:+.2f} EUR")
+
+            # Turbo berekening — zelfde logica als bestaande calculator
+            turbo_entry = round(entry / (lev * rat), 2) if lev > 0 and rat > 0 else 0.0
+            sig = {"side": side, "entry": entry, "sl": sl, "tp": tp}
+            res = TurboTranslator({"leverage": lev}).translate(
+                sig, asml_price=entry, turbo_price=turbo_entry, ratio=rat,
+            )
+            t_sl        = res.get("turbo_sl_price")
+            t_tp        = res.get("turbo_tp_price")
+            financing   = res.get("financing")
+
+            st.divider()
+
+            lc, rc = st.columns([1, 2])
+            lc.markdown("**Turbo entry**")
+            rc.markdown(f"**€ {turbo_entry:.2f}**")
+
+            if t_sl is not None:
+                _tsl_d  = abs(turbo_entry - t_sl)
+                _ttp_d  = abs(t_tp - turbo_entry)
+                _rr     = round(_ttp_d / _tsl_d, 2) if _tsl_d > 0 else 0.0
+                _sl_pct = (t_sl / turbo_entry - 1) * 100 if turbo_entry else 0.0
+                _tp_pct = (t_tp / turbo_entry - 1) * 100 if turbo_entry else 0.0
+
+                for _lbl, _val in [
+                    ("🔴 Turbo SL",   f"**€ {t_sl:.2f}**  *({_sl_pct:+.1f}% / −{_tsl_d:.2f})*"),
+                    ("🟢 Turbo TP",   f"**€ {t_tp:.2f}**  *({_tp_pct:+.1f}% / +{_ttp_d:.2f})*"),
+                    ("R/R",           f"**{_rr:.2f}**"),
+                    ("Financiering",  f"€ {financing:.2f}" if financing is not None else "—"),
+                ]:
+                    lc, rc = st.columns([1, 2])
+                    lc.markdown(f"**{_lbl}**")
+                    rc.markdown(_val)
+            else:
+                st.info("Controleer leverage en ratio.")
+
+
+# ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
@@ -158,6 +273,32 @@ def _get_engine() -> TradingEngine:
 
 engine = _get_engine()
 
+# Initialiseer sidebar-defaults vanuit config (alleen als sleutel nog niet bestaat)
+_cfg = engine.cfg
+_tl  = _cfg.get("turbo_long",  {})
+_ts  = _cfg.get("turbo_short", {})
+for _k, _v in [
+    ("turbo_long_name",      _tl.get("name",     "")),
+    ("turbo_long_isin",      _tl.get("isin",     "")),
+    ("turbo_long_leverage",  float(_tl.get("leverage", engine.leverage))),
+    ("turbo_long_ratio",     int(_tl.get("ratio",    int(engine.ratio)))),
+    ("turbo_short_name",     _ts.get("name",     "")),
+    ("turbo_short_isin",     _ts.get("isin",     "")),
+    ("turbo_short_leverage", float(_ts.get("leverage", engine.leverage))),
+    ("turbo_short_ratio",    int(_ts.get("ratio",    int(engine.ratio)))),
+]:
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
+
+# Box levels — auto-ophalen bij eerste run of bij ticker-wijziging
+if ("box_levels" not in st.session_state
+        or st.session_state.get("_box_ticker") != engine.ticker):
+    st.session_state["box_levels"] = _fetch_box_levels(engine.ticker)
+    st.session_state["_box_ticker"] = engine.ticker
+    for _k in ["box_long_entry", "box_long_sl", "box_long_tp",
+               "box_short_entry", "box_short_sl", "box_short_tp"]:
+        st.session_state.pop(_k, None)
+
 # ---------------------------------------------------------------------------
 # Sidebar — configuration & controls
 # ---------------------------------------------------------------------------
@@ -166,6 +307,7 @@ with st.sidebar:
     st.title("Instellingen")
 
     SETUP_OPTIONS = {
+        "prev_day_box":        "Previous Day Box",
         "morning_gap":         "Morning Gap Fill       (08:05-09:00)",
         "morning_momentum":    "Morning Momentum       (09:15-10:00)",
         "opening_range_break": "Opening Range Break    (08:20-08:45)",
@@ -197,33 +339,36 @@ with st.sidebar:
         horizontal=True,
     )
 
-    leverage = st.number_input(
-        "Leverage",
-        min_value=1.0,
-        max_value=20.0,
-        value=float(engine.leverage),
-        step=0.05,
-        format="%.2f",
-    )
-
-    ratio = st.selectbox(
-        "Ratio",
-        options=[1, 10, 100],
-        index=[1, 10, 100].index(int(engine.ratio)) if int(engine.ratio) in [1, 10, 100] else 1,
-        help="Turbo product ratio (1, 10 of 100)",
-    )
+    if st.button("🔄 Box data vernieuwen", use_container_width=True, key="box_refresh_sidebar"):
+        for _k in ["box_levels", "_box_ticker", "box_long_entry", "box_long_sl", "box_long_tp",
+                   "box_short_entry", "box_short_sl", "box_short_tp"]:
+            st.session_state.pop(_k, None)
+        st.rerun()
 
     st.divider()
-    st.markdown("**Turbo product**")
-    st.text_input(
-        "Naam Turbo",
-        key="turbo_name",
-        placeholder="bijv. TURBO LONG ASML",
+    st.markdown("**🟢 Turbo LONG**")
+    st.text_input("Naam", key="turbo_long_name", placeholder="bijv. TURBO LONG ASML")
+    st.text_input("ISIN", key="turbo_long_isin", placeholder="bijv. NL0000000000")
+    leverage_long = st.number_input(
+        "Leverage", min_value=1.0, max_value=20.0,
+        step=0.05, format="%.2f",
+        key="turbo_long_leverage",
     )
-    st.text_input(
-        "ISIN",
-        key="turbo_isin",
-        placeholder="bijv. NL0000000000",
+    ratio_long = st.selectbox(
+        "Ratio", options=[1, 10, 100],
+        help="Product ratio (1, 10 of 100)", key="turbo_long_ratio",
+    )
+    st.markdown("**🔴 Turbo SHORT**")
+    st.text_input("Naam", key="turbo_short_name", placeholder="bijv. TURBO SHORT ASML")
+    st.text_input("ISIN", key="turbo_short_isin", placeholder="bijv. NL0000000001")
+    leverage_short = st.number_input(
+        "Leverage", min_value=1.0, max_value=20.0,
+        step=0.05, format="%.2f",
+        key="turbo_short_leverage",
+    )
+    ratio_short = st.selectbox(
+        "Ratio", options=[1, 10, 100],
+        help="Product ratio (1, 10 of 100)", key="turbo_short_ratio",
     )
 
     st.divider()
@@ -249,8 +394,8 @@ with st.sidebar:
         engine.start(
             setup_name=setup_choice,
             prev_close=float(engine.prev_close),
-            leverage=float(leverage),
-            ratio=float(ratio),
+            leverage=float(leverage_long),
+            ratio=float(ratio_long),
             ticker=ticker.strip(),
             feed_mode=feed_mode,
         )
@@ -309,6 +454,100 @@ if state["error_msg"]:
 st.divider()
 
 # ---------------------------------------------------------------------------
+# Box Strategie sectie
+# ---------------------------------------------------------------------------
+_box       = st.session_state.get("box_levels")
+_lev_long  = float(leverage_long)
+_rat_long  = float(ratio_long)
+_lev_short = float(leverage_short)
+_rat_short = float(ratio_short)
+
+if _box:
+    _bd, _bh, _bl, _bm = _box["date"], _box["high"], _box["low"], _box["mid"]
+else:
+    _ref = state["current_price"] or float(state["prev_close"])
+    _bh  = round(_ref * 1.005, 2)
+    _bl  = round(_ref * 0.995, 2)
+    _bm  = round(_ref, 2)
+    _bd  = "—"
+
+with st.container(border=True):
+    # Titel + refresh
+    _btitle_col, _brefresh_col = st.columns([6, 1])
+    with _btitle_col:
+        st.markdown(f"**📦 Box strategie** &nbsp;&nbsp; Vorige dag: **{_bd}**")
+        if not _box:
+            st.caption("⚠️ Geen box data — druk op **🔄 Box data vernieuwen** in de zijbalk.")
+    with _brefresh_col:
+        if st.button("🔄 Vernieuwen", key="box_refresh_main"):
+            for _k in ["box_levels", "_box_ticker", "box_long_entry", "box_long_sl", "box_long_tp",
+                       "box_short_entry", "box_short_sl", "box_short_tp"]:
+                st.session_state.pop(_k, None)
+            st.rerun()
+
+    # Low | Mid | High in drie kolommen — turbo-waarden conditioneel eronder
+    _t_long_name  = st.session_state.get("turbo_long_name",  "")
+    _t_long_isin  = st.session_state.get("turbo_long_isin",  "")
+    _t_short_name = st.session_state.get("turbo_short_name", "")
+    _t_short_isin = st.session_state.get("turbo_short_isin", "")
+    _has_long_t   = bool(_t_long_name or _t_long_isin)
+    _has_short_t  = bool(_t_short_name or _t_short_isin)
+
+    # Vaste dagkoers per turbo — berekend met de eigen leverage × ratio
+    _turbo_at_low  = round(_bl / (_lev_long  * _rat_long),  2) if _lev_long  > 0 and _rat_long  > 0 else None
+    _turbo_at_high = round(_bh / (_lev_short * _rat_short), 2) if _lev_short > 0 and _rat_short > 0 else None
+
+    _col_l, _col_m, _col_h = st.columns(3)
+    with _col_l:
+        st.markdown(f"🟢 Low: **€ {_bl:,.2f}**")
+        if _turbo_at_low is not None:
+            st.markdown(f"Turbo Long: **€ {_turbo_at_low:.2f}**")
+            _l_label = "  |  ".join(filter(None, [_t_long_name, _t_long_isin]))
+            if _l_label:
+                st.caption(_l_label)
+    with _col_m:
+        st.markdown(f"⚫ Mid: **€ {_bm:,.2f}**")
+        _turbo_mid_long  = round(_bm / (_lev_long  * _rat_long),  2) if _lev_long  > 0 and _rat_long  > 0 else None
+        _turbo_mid_short = round(_bm / (_lev_short * _rat_short), 2) if _lev_short > 0 and _rat_short > 0 else None
+        if _turbo_mid_long is not None:
+            st.markdown(f"🟢 Long: **€ {_turbo_mid_long:.2f}**")
+        if _turbo_mid_short is not None:
+            st.markdown(f"🔴 Short: **€ {_turbo_mid_short:.2f}**")
+    with _col_h:
+        st.markdown(f"🔴 High: **€ {_bh:,.2f}**")
+        if _turbo_at_high is not None:
+            st.markdown(f"Turbo Short: **€ {_turbo_at_high:.2f}**")
+            _s_label = "  |  ".join(filter(None, [_t_short_name, _t_short_isin]))
+            if _s_label:
+                st.caption(_s_label)
+
+    st.divider()
+
+    _rng       = max(_bh - _bl, 1.0)
+    _long_col, _short_col = st.columns(2, gap="small")
+
+    _render_box_zone(
+        _long_col, "LONG", "box_long",
+        def_entry=_bl,
+        def_sl=round(_bl - _rng * 0.15, 2),
+        def_tp=_bm,
+        lev=_lev_long, rat=_rat_long,
+        turbo_naam=st.session_state.get("turbo_long_name", ""),
+        turbo_isin=st.session_state.get("turbo_long_isin", ""),
+    )
+    _render_box_zone(
+        _short_col, "SHORT", "box_short",
+        def_entry=_bh,
+        def_sl=round(_bh + _rng * 0.15, 2),
+        def_tp=_bm,
+        lev=_lev_short, rat=_rat_short,
+        turbo_naam=st.session_state.get("turbo_short_name", ""),
+        turbo_isin=st.session_state.get("turbo_short_isin", ""),
+    )
+
+st.divider()
+
+# ---------------------------------------------------------------------------
 # Chart prep — compute defaults and bounds
 # ---------------------------------------------------------------------------
 candles     = state["candle_history"]
@@ -356,8 +595,8 @@ with sltp_col:
         # Turbo entry row — berekend uit ASML entry + leverage + ratio
         te_lbl, te_val = st.columns([1, 2])
         te_lbl.markdown("🔵 **Turbo entry**")
-        _lev = float(leverage)
-        _rat = float(ratio)
+        _lev = float(leverage_long) if default_side == "LONG" else float(leverage_short)
+        _rat = float(ratio_long)    if default_side == "LONG" else float(ratio_short)
         chart_turbo_entry = round(chart_asml_entry / (_lev * _rat), 2) if _lev > 0 and _rat > 0 else 0.0
         te_val.markdown(f"**€ {chart_turbo_entry:.2f}**")
 
@@ -416,12 +655,16 @@ with sltp_col:
 # --- Right: Turbo Calculator — all values from main block + sidebar settings ---
 _calc_side        = default_side
 _calc_turbo_price = chart_turbo_entry
-_calc_ratio       = float(ratio)
+_calc_ratio       = float(ratio_long) if _calc_side == "LONG" else float(ratio_short)
 
 with turbo_col:
     with st.container(border=True):
-        _tname = st.session_state.get("turbo_name", "")
-        _tisin = st.session_state.get("turbo_isin", "")
+        if _calc_side == "LONG":
+            _tname = st.session_state.get("turbo_long_name", "")
+            _tisin = st.session_state.get("turbo_long_isin", "")
+        else:
+            _tname = st.session_state.get("turbo_short_name", "")
+            _tisin = st.session_state.get("turbo_short_isin", "")
         _product_label = "  |  ".join(filter(None, [_tname, _tisin]))
         st.markdown(
             f"**Turbo Calculator**"

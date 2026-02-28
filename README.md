@@ -1,234 +1,158 @@
 # ASML Trading App
 
-A Python application that monitors ASML 1-minute candles, detects trading setups, and translates ASML share price SL/TP to turbo product levels.
+Een Streamlit-webapplicatie als **rekenhulp naast ProRealTime en DeGiro** voor het handmatig handelen in ASML-turboproducten.
 
-## Features
-
-- **Phase 1 (Signals only)**: Detects trading setups and prints terminal notifications with ASML and turbo SL/TP levels.
-- **Mock and Real Data**: Mock feed (1-minute candles with random walk) for testing; ready for Saxo Bank API integration.
-- **Trading Setups**: Morning Gap Fill and Breakout setups (more from `ASML_Trading_Setups_Details.xlsx` convertible on demand).
-- **Turbo Translation**: Converts ASML SL/TP distances to turbo product distances using configurable leverage (3.00–4.00).
-- **Multiple Launch Modes**: GUI (local testing), CLI args, env vars (VPS), or interactive prompts (backward compat).
-- **Clean Modular Structure**: `data/`, `strategy/`, `strategies/`, `turbo/`, `ui/` for easy extension.
+De app haalt automatisch de vorige handelsdag High/Low/Mid op en berekent de bijbehorende turbo-instapkoersen, SL- en TP-niveaus. Orders worden handmatig ingevoerd in DeGiro; de app geeft alleen berekeningen en signaalindicaties.
 
 ---
 
-## Installation
+## Functionaliteiten
 
-### 1. Create Virtual Environment
+- **Box Strategie** — Vorige handelsdag H/L/M automatisch ophalen (yfinance, weekendbestendig). Twee zones naast elkaar: LONG (onderkant box) en SHORT (bovenkant box), elk met eigen ASML entry/SL/TP en bijbehorende turbo-berekeningen.
+- **Turbo Calculator** — Financing-aware vertaling van ASML SL/TP naar turbo-prijzen, R/R-ratio en financieringsniveau. Aparte instellingen voor Turbo LONG en Turbo SHORT (naam, ISIN, leverage, ratio).
+- **Candlestick Chart** — Plotly-chart met SL/TP/Entry-lijnen en signaalmarkers.
+- **Trading Setups** — Automatische signaaldetectie: Previous Day Box, Morning Gap Fill, Morning Momentum, Opening Range Break, Closing Reversion, generieke Breakout.
+- **Twee feeds** — Demo (random-walk mock data) en Live (yfinance, 1-min candles, 15 min vertraagd).
+- **Candle-cache** — Persistente cache over browser-refresh (datum + ticker validatie).
+
+---
+
+## Installatie
 
 ```bash
-cd c:\DEV\asml_trading_app
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
-
-### 2. Install Dependencies
-
-```bash
-python -m pip install -r requirements.txt
+cd c:\DEV\Prive\asml-trading-app
+python -m venv backend\venv
+backend\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
 ---
 
-## Usage
-
-### Mode 1: Local GUI (for Testing)
-
-Enable the GUI in `config.yaml`:
-
-```yaml
-gui_mode: true
-```
-
-Then run:
+## Starten
 
 ```bash
-python main.py
+backend\venv\Scripts\streamlit run streamlit_app.py
 ```
 
-A tkinter window appears where you can:
-- Select the trading setup (Morning Gap Fill / Breakout)
-- Enter turbo leverage (3.00–4.00, two decimals)
-- Enter turbo entry price (two decimals)
-- Click **Start Monitor** to run
-
-### Mode 2: CLI Arguments (for VPS / Non-Interactive)
-
-Run with command-line arguments:
-
-```bash
-python main.py --leverage 3.50 --turbo-entry 12.34 --setup morning_gap
-```
-
-**Available flags:**
-- `--leverage FLOAT`: Turbo leverage (3.00–4.00). Defaults to `turbo.leverage` in config if not provided.
-- `--turbo-entry FLOAT`: Turbo entry price (two decimals). If provided, app computes absolute turbo SL/TP.
-- `--setup {morning_gap,breakout}`: Which trading setup to run.
-- `--no-gui`: Force prompts mode even if `gui_mode` is enabled.
-
-### Mode 3: Environment Variables (for VPS / Docker)
-
-Set environment variables before running:
-
-**PowerShell:**
-```powershell
-$env:ASML_LEVERAGE = "3.50"
-$env:ASML_TURBO_ENTRY = "12.34"
-$env:ASML_SETUP = "morning_gap"
-python main.py
-```
-
-**Bash:**
-```bash
-export ASML_LEVERAGE=3.50
-export ASML_TURBO_ENTRY=12.34
-export ASML_SETUP=morning_gap
-python main.py
-```
-
-### Mode 4: Interactive Prompts (Backward Compat)
-
-Enable prompts in `config.yaml`:
-
-```yaml
-manual_turbo: true
-manual_turbo_price: true
-gui_mode: false
-```
-
-Run:
-
-```bash
-python main.py
-```
-
-The terminal will prompt you to enter leverage and turbo entry price (press Enter to skip).
+Open daarna [http://localhost:8501](http://localhost:8501).
 
 ---
 
-## Configuration
+## Configuratie
 
-Edit `config.yaml` to customize behavior:
+Maak `config.yaml` aan op basis van `config.example.yaml`:
 
 ```yaml
-underlying_symbol: ASML
+# Onderliggende waarde
+underlying_symbol: ASML.AS
 
+# Turbo LONG product
+turbo_long:
+  name: "ASML Long 949"
+  isin: "NLBNPNL3EX12"
+  leverage: 3.55
+  ratio: 100
+
+# Turbo SHORT product
+turbo_short:
+  name: "ASML Short 1,453.1"
+  isin: "NLBNPNL3FE71"
+  leverage: 3.55
+  ratio: 100
+
+# Legacy leverage/ratio (fallback als turbo_long/short ontbreekt)
 turbo:
-  leverage: 3.50              # Default turbo leverage
-  long_isin: "NL0000000000"   # Turbo LONG product ISIN
-  short_isin: "NL0000000001"  # Turbo SHORT product ISIN
+  leverage: 3.55
+  ratio: 100
 
-setups:
-  morning_gap:
-    gap_min: 10.0             # Minimum gap in EUR to trigger
-    vol_min: 100              # Minimum volume
-    tp_ratio: 1.5             # TP/SL ratio
-  
-  breakout:
-    lookback: 20              # Candles to inspect for breakout
-    vol_mult: 1.5             # Volume multiplier vs MA
+# Default setup bij opstarten
+demo_setup: prev_day_box
 
-demo_setup: morning_gap       # Which setup to run by default
-demo_prev_close: 1210.0       # Previous day close (for Morning Gap)
-demo_limit: 200               # Max candles to process (test runs)
-demo_force_window: true       # Always-on time window (for testing)
+# Demo-opties
+demo_prev_close: 1210.0
+demo_limit: 500
+demo_force_window: true   # tijdvensters negeren in demo-modus
+```
 
-# UI modes
-manual_turbo: false           # Prompt for leverage at startup
-manual_turbo_price: false     # Prompt for turbo entry price
-gui_mode: false               # Launch tkinter GUI
+> `config.yaml` staat in `.gitignore`. Gebruik `config.example.yaml` als startpunt.
+
+---
+
+## Turbo-berekening
+
+```
+Intrinsic  = turbo_price × ratio
+Financing  = asml_price − intrinsic        (LONG)
+           = asml_price + intrinsic        (SHORT)
+
+Turbo SL   = (sl − financing) / ratio     (LONG)
+Turbo TP   = (tp − financing) / ratio
+
+Turbo SL   = (financing − sl) / ratio     (SHORT)
+Turbo TP   = (financing − tp) / ratio
+```
+
+Turbo entry wordt berekend als `asml_entry / (leverage × ratio)`.
+
+---
+
+## UI-layout
+
+```
+Sidebar: setup, ticker, feed_mode, 🔄 Box vernieuwen,
+         🟢 Turbo LONG (naam/ISIN/leverage/ratio),
+         🔴 Turbo SHORT (naam/ISIN/leverage/ratio),
+         Start / Stop
+
+Hoofdscherm:
+  Header: status + actuele koers
+  📦 Box Strategie (border):
+    Low | Mid | High + corresponderende turbo-prijzen
+    🟢 LONG zone | 🔴 SHORT zone
+      ASML Entry / SL / TP → Turbo entry / SL / TP / R/R / Financiering
+  Niveau-blok | Turbo Calculator
+  Candlestick chart
 ```
 
 ---
 
-## Output Example
-
-When a setup trigger is detected:
+## Projectstructuur
 
 ```
-[Morning Gap Fill] [LONG] Entry: 1205.2, SL: 1198.5, TP: 1215.8 | Turbo Entry: 3.45, SL: 3.36, TP: 3.52 | Turbo lev: 3.50
-```
-
-**Breakdown:**
-- `[Morning Gap Fill]`: Trading setup name from Excel.
-- `[LONG]`: Signal direction.
-- `Entry: 1205.2, SL: 1198.5, TP: 1215.8`: ASML share price levels.
-- `Turbo Entry: 3.45, SL: 3.36, TP: 3.52`: Turbo product levels (if turbo entry price provided).
-- `Turbo lev: 3.50`: Turbo leverage used.
-
----
-
-## Turbo SL/TP Calculation
-
-The app translates ASML underlying distances to turbo distances:
-
-$$d^{T}_{SL} = \frac{|E_{ASML} - SL_{ASML}|}{L}$$
-$$d^{T}_{TP} = \frac{|TP_{ASML} - E_{ASML}|}{L}$$
-
-where $L$ is the turbo leverage (3.00–4.00).
-
-If you provide a turbo entry price $E^T$:
-- **LONG**: $SL^T = E^T - d^T_{SL}$, $TP^T = E^T + d^T_{TP}$
-- **SHORT**: $SL^T = E^T + d^T_{SL}$, $TP^T = E^T - d^T_{TP}$
-
----
-
-## Project Structure
-
-```
-asml_trading_app/
-├── main.py                    # Main entry point, CLI/env var/GUI logic
-├── config.yaml                # Configuration file
-├── requirements.txt           # Python dependencies
-├── ASML_Trading_Setups_Details.xlsx  # Trading setup definitions (from Excel)
+asml-trading-app/
+├── streamlit_app.py           # Hoofd UI (Streamlit)
+├── config.yaml                # Lokale configuratie (GITIGNORED)
+├── config.example.yaml        # Template voor config.yaml
+├── requirements.txt
+├── backend/
+│   └── engine.py              # TradingEngine daemon thread + candle-cache
 ├── data/
-│   └── mock_saxo.py          # Mock 1-minute candle feed
-├── strategy/
-│   └── breakout.py           # Breakout strategy (generic)
+│   ├── mock_saxo.py           # Demo random-walk feed
+│   ├── yfinance_feed.py       # Live yfinance feed (1-min)
+│   └── candle_cache.json      # Runtime cache (GITIGNORED)
 ├── strategies/
-│   └── asml_setups.py        # Morning Gap Fill and other ASML-specific setups
+│   └── asml_setups.py         # 4 ASML-specifieke setups
+├── strategy/
+│   └── breakout.py            # Generieke breakout
 ├── turbo/
-│   └── translate.py          # Turbo SL/TP translator
-└── ui/
-    ├── notifier.py           # Terminal signal printer
-    └── gui.py                # Tkinter GUI for config
+│   └── translate.py           # Turbo SL/TP calculator (financing-aware)
+├── .streamlit/
+│   └── config.toml            # Streamlit server + dark theme
+└── ui/                        # Legacy CLI-interface (niet actief)
+    ├── notifier.py
+    └── gui.py
 ```
 
 ---
 
-## Next Steps (Phase 2)
+## Bekende beperkingen
 
-- Integrate Saxo Bank API for live data and order preparation.
-- Add manual order confirmation workflow.
-- Support additional setups from the Excel workbook.
-- Persist trade history to CSV.
-
----
-
-## Notes
-
-- **Leverage Range**: 3.00–4.00 (two decimals), as per your requirement.
-- **Time Window**: The Morning Gap Fill setup respects a time window (default 08:05–09:00) but is configured to be "always-on" in demo mode for testing.
-- **Mock Feed**: Random-walk price generation for testing. Replace with Saxo API for live trading.
-- **Turbo Multiplier**: The app uses a simple linear approximation (distance / leverage). For production, fetch exact turbo multipliers from your broker.
+- yfinance: 15 min vertraagd op Euronext; lopende minuutcandles hebben open=close (streepcandles).
+- Volume van yfinance is onbetrouwbaar → volume-gebaseerde signalen werken alleen betrouwbaar met mock data.
+- Candle-cache is niet persistent op Streamlit Community Cloud (ephemeral filesystem).
 
 ---
 
-## Troubleshooting
+## Legacy CLI
 
-### GUI does not appear (VPS/headless environment)
-
-Set `gui_mode: false` or use `--no-gui` flag. Use CLI args or env vars instead.
-
-### "request cancelled" during execution
-
-This indicates the execution environment doesn't support long-running processes. Use `demo_limit` to cap candles processed, or run locally.
-
-### Prompts don't appear
-
-Make sure `manual_turbo` or `manual_turbo_price` is `true` in config, and neither CLI args nor env vars are set.
-
----
-
-Happy trading!
+`main.py` bevat een oude CLI/tkinter-interface (niet meer actief gebruikt). Bewaard voor compatibiliteit.
