@@ -1,4 +1,4 @@
-# ASML Trading App
+# For Personal Use Only ASML Trading App
 
 Een Streamlit-webapplicatie als **rekenhulp naast ProRealTime en DeGiro** voor het handmatig handelen in ASML-turboproducten.
 
