@@ -273,7 +273,8 @@ def _get_engine() -> TradingEngine:
 
 engine = _get_engine()
 
-# Initialiseer sidebar-defaults vanuit config (alleen als sleutel nog niet bestaat)
+# Initialiseer sidebar-defaults vanuit config.
+# Overschrijf ook als de huidige waarde leeg/nul is (bijv. lege string uit vorige sessie).
 _cfg = engine.cfg
 _tl  = _cfg.get("turbo_long",  {})
 _ts  = _cfg.get("turbo_short", {})
@@ -287,7 +288,7 @@ for _k, _v in [
     ("turbo_short_leverage", float(_ts.get("leverage", engine.leverage))),
     ("turbo_short_ratio",    int(_ts.get("ratio",    int(engine.ratio)))),
 ]:
-    if _k not in st.session_state:
+    if _v and not st.session_state.get(_k):
         st.session_state[_k] = _v
 
 # Box levels — auto-ophalen bij eerste run of bij ticker-wijziging

@@ -115,6 +115,7 @@ App is volledig functioneel als Streamlit-web UI:
 - [x] **Config-driven defaults** — turbo_long / turbo_short in config.yaml → automatisch geladen in session_state bij eerste run; ASML Long 949 en ASML Short 1,453.1 als standaard
 - [x] **Previous Day Box als default setup** — demo_setup: prev_day_box, ticker default ASML.AS
 - [x] **Box header: Low | Mid | High** — turbo-prijzen bij Low (Long) en High (Short); mid toont beide turbo-prijzen
+- [x] **Fix: config-defaults overschreven lege session_state niet** — conditie gewijzigd van `not in session_state` naar `_v and not session_state.get(_k)`; defaults laden nu ook als sleutel leeg is vanuit vorige sessie
 - [x] **Fix: Streamlit widget-conflict** — value= / index= verwijderd uit per-turbo number_input/selectbox; session_state is enige bron
 - [x] Box Strategie sectie: prev-day H/L/M ophalen via yfinance, twee zones (LONG/SHORT) naast elkaar, turbo entry/SL/TP + R/R + financiering per zone
 - [x] Live data via yfinance: configureerbare ticker + feed-modus (mock/live radio)
