@@ -163,7 +163,7 @@ def _fetch_box_levels(ticker: str) -> dict | None:
         return None
 
 
-def _render_box_zone(col, side, key_pfx, def_entry, def_sl, def_tp, lev, rat,
+def _render_box_zone(col, side, key_pfx, def_entry, def_sl, def_tp, fin, rat,
                      turbo_naam="", turbo_isin=""):
     """Render één box-zone (LONG of SHORT) met ASML-inputs en turbo-output."""
     icon  = "🟢" if side == "LONG" else "🔴"
@@ -204,15 +204,13 @@ def _render_box_zone(col, side, key_pfx, def_entry, def_sl, def_tp, lev, rat,
                 _tp_dist = round(entry - tp, 2)
             st.caption(f"SL afstand: {_sl_dist:+.2f} EUR  |  TP afstand: {_tp_dist:+.2f} EUR")
 
-            # Turbo berekening — zelfde logica als bestaande calculator
-            turbo_entry = round(entry / (lev * rat), 2) if lev > 0 and rat > 0 else 0.0
+            # Turbo berekening via financieringsniveau
             sig = {"side": side, "entry": entry, "sl": sl, "tp": tp}
-            res = TurboTranslator({"leverage": lev}).translate(
-                sig, asml_price=entry, turbo_price=turbo_entry, ratio=rat,
-            )
+            res = TurboTranslator({}).translate(sig, asml_price=entry, financing=fin, ratio=rat)
+            turbo_entry = res.get("turbo_entry_price", 0.0)
             t_sl        = res.get("turbo_sl_price")
             t_tp        = res.get("turbo_tp_price")
-            financing   = res.get("financing")
+            leverage    = res.get("leverage")
 
             st.divider()
 
@@ -228,16 +226,16 @@ def _render_box_zone(col, side, key_pfx, def_entry, def_sl, def_tp, lev, rat,
                 _tp_pct = (t_tp / turbo_entry - 1) * 100 if turbo_entry else 0.0
 
                 for _lbl, _val in [
-                    ("🔴 Turbo SL",   f"**€ {t_sl:.2f}**  *({_sl_pct:+.1f}% / −{_tsl_d:.2f})*"),
-                    ("🟢 Turbo TP",   f"**€ {t_tp:.2f}**  *({_tp_pct:+.1f}% / +{_ttp_d:.2f})*"),
-                    ("R/R",           f"**{_rr:.2f}**"),
-                    ("Financiering",  f"€ {financing:.2f}" if financing is not None else "—"),
+                    ("🔴 Turbo SL",  f"**€ {t_sl:.2f}**  *({_sl_pct:+.1f}% / −{_tsl_d:.2f})*"),
+                    ("🟢 Turbo TP",  f"**€ {t_tp:.2f}**  *({_tp_pct:+.1f}% / +{_ttp_d:.2f})*"),
+                    ("R/R",          f"**{_rr:.2f}**"),
+                    ("Leverage",     f"{leverage:.2f}×" if leverage is not None else "—"),
                 ]:
                     lc, rc = st.columns([1, 2])
                     lc.markdown(f"**{_lbl}**")
                     rc.markdown(_val)
             else:
-                st.info("Controleer leverage en ratio.")
+                st.info("Stel het financieringsniveau in de zijbalk in.")
 
 
 # ---------------------------------------------------------------------------
@@ -279,14 +277,14 @@ _cfg = engine.cfg
 _tl  = _cfg.get("turbo_long",  {})
 _ts  = _cfg.get("turbo_short", {})
 for _k, _v in [
-    ("turbo_long_name",      _tl.get("name",     "")),
-    ("turbo_long_isin",      _tl.get("isin",     "")),
-    ("turbo_long_leverage",  float(_tl.get("leverage", engine.leverage))),
-    ("turbo_long_ratio",     int(_tl.get("ratio",    int(engine.ratio)))),
-    ("turbo_short_name",     _ts.get("name",     "")),
-    ("turbo_short_isin",     _ts.get("isin",     "")),
-    ("turbo_short_leverage", float(_ts.get("leverage", engine.leverage))),
-    ("turbo_short_ratio",    int(_ts.get("ratio",    int(engine.ratio)))),
+    ("turbo_long_name",       _tl.get("name",      "")),
+    ("turbo_long_isin",       _tl.get("isin",      "")),
+    ("turbo_long_financing",  float(_tl.get("financing", 0.0))),
+    ("turbo_long_ratio",      int(_tl.get("ratio", int(engine.ratio)))),
+    ("turbo_short_name",      _ts.get("name",      "")),
+    ("turbo_short_isin",      _ts.get("isin",      "")),
+    ("turbo_short_financing", float(_ts.get("financing", 0.0))),
+    ("turbo_short_ratio",     int(_ts.get("ratio", int(engine.ratio)))),
 ]:
     if _v and not st.session_state.get(_k):
         st.session_state[_k] = _v
@@ -350,10 +348,11 @@ with st.sidebar:
     st.markdown("**🟢 Turbo LONG**")
     st.text_input("Naam", key="turbo_long_name", placeholder="bijv. TURBO LONG ASML")
     st.text_input("ISIN", key="turbo_long_isin", placeholder="bijv. NL0000000000")
-    leverage_long = st.number_input(
-        "Leverage", min_value=1.0, max_value=20.0,
-        step=0.05, format="%.2f",
-        key="turbo_long_leverage",
+    financing_long = st.number_input(
+        "Financiering", min_value=1.0, max_value=9000.0,
+        step=0.5, format="%.2f",
+        key="turbo_long_financing",
+        help="Financieringsniveau van de turbo (dagelijks vastgesteld)",
     )
     ratio_long = st.selectbox(
         "Ratio", options=[1, 10, 100],
@@ -362,10 +361,11 @@ with st.sidebar:
     st.markdown("**🔴 Turbo SHORT**")
     st.text_input("Naam", key="turbo_short_name", placeholder="bijv. TURBO SHORT ASML")
     st.text_input("ISIN", key="turbo_short_isin", placeholder="bijv. NL0000000001")
-    leverage_short = st.number_input(
-        "Leverage", min_value=1.0, max_value=20.0,
-        step=0.05, format="%.2f",
-        key="turbo_short_leverage",
+    financing_short = st.number_input(
+        "Financiering", min_value=1.0, max_value=9000.0,
+        step=0.5, format="%.2f",
+        key="turbo_short_financing",
+        help="Financieringsniveau van de turbo (dagelijks vastgesteld)",
     )
     ratio_short = st.selectbox(
         "Ratio", options=[1, 10, 100],
@@ -395,7 +395,6 @@ with st.sidebar:
         engine.start(
             setup_name=setup_choice,
             prev_close=float(engine.prev_close),
-            leverage=float(leverage_long),
             ratio=float(ratio_long),
             ticker=ticker.strip(),
             feed_mode=feed_mode,
@@ -458,9 +457,9 @@ st.divider()
 # Box Strategie sectie
 # ---------------------------------------------------------------------------
 _box       = st.session_state.get("box_levels")
-_lev_long  = float(leverage_long)
+_fin_long  = float(financing_long)
 _rat_long  = float(ratio_long)
-_lev_short = float(leverage_short)
+_fin_short = float(financing_short)
 _rat_short = float(ratio_short)
 
 if _box:
@@ -480,7 +479,7 @@ with st.container(border=True):
         if not _box:
             st.caption("⚠️ Geen box data — druk op **🔄 Box data vernieuwen** in de zijbalk.")
     with _brefresh_col:
-        if st.button("🔄 Vernieuwen", key="box_refresh_main"):
+        if st.button("🔄", key="box_refresh_main", help="Box data vernieuwen"):
             for _k in ["box_levels", "_box_ticker", "box_long_entry", "box_long_sl", "box_long_tp",
                        "box_short_entry", "box_short_sl", "box_short_tp"]:
                 st.session_state.pop(_k, None)
@@ -494,9 +493,9 @@ with st.container(border=True):
     _has_long_t   = bool(_t_long_name or _t_long_isin)
     _has_short_t  = bool(_t_short_name or _t_short_isin)
 
-    # Vaste dagkoers per turbo — berekend met de eigen leverage × ratio
-    _turbo_at_low  = round(_bl / (_lev_long  * _rat_long),  2) if _lev_long  > 0 and _rat_long  > 0 else None
-    _turbo_at_high = round(_bh / (_lev_short * _rat_short), 2) if _lev_short > 0 and _rat_short > 0 else None
+    # Turbo prijs bij box-niveaus — berekend via financieringsniveau
+    _turbo_at_low  = round((_bl - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
+    _turbo_at_high = round((_fin_short - _bh) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
 
     _col_l, _col_m, _col_h = st.columns(3)
     with _col_l:
@@ -508,8 +507,8 @@ with st.container(border=True):
                 st.caption(_l_label)
     with _col_m:
         st.markdown(f"⚫ Mid: **€ {_bm:,.2f}**")
-        _turbo_mid_long  = round(_bm / (_lev_long  * _rat_long),  2) if _lev_long  > 0 and _rat_long  > 0 else None
-        _turbo_mid_short = round(_bm / (_lev_short * _rat_short), 2) if _lev_short > 0 and _rat_short > 0 else None
+        _turbo_mid_long  = round((_bm - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
+        _turbo_mid_short = round((_fin_short - _bm) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
         if _turbo_mid_long is not None:
             st.markdown(f"🟢 Long: **€ {_turbo_mid_long:.2f}**")
         if _turbo_mid_short is not None:
@@ -532,7 +531,7 @@ with st.container(border=True):
         def_entry=_bl,
         def_sl=round(_bl - _rng * 0.15, 2),
         def_tp=_bm,
-        lev=_lev_long, rat=_rat_long,
+        fin=_fin_long, rat=_rat_long,
         turbo_naam=st.session_state.get("turbo_long_name", ""),
         turbo_isin=st.session_state.get("turbo_long_isin", ""),
     )
@@ -541,7 +540,7 @@ with st.container(border=True):
         def_entry=_bh,
         def_sl=round(_bh + _rng * 0.15, 2),
         def_tp=_bm,
-        lev=_lev_short, rat=_rat_short,
+        fin=_fin_short, rat=_rat_short,
         turbo_naam=st.session_state.get("turbo_short_name", ""),
         turbo_isin=st.session_state.get("turbo_short_isin", ""),
     )
@@ -593,12 +592,15 @@ with sltp_col:
                 label_visibility="collapsed",
             )
 
-        # Turbo entry row — berekend uit ASML entry + leverage + ratio
+        # Turbo entry row — berekend via financieringsniveau
         te_lbl, te_val = st.columns([1, 2])
         te_lbl.markdown("🔵 **Turbo entry**")
-        _lev = float(leverage_long) if default_side == "LONG" else float(leverage_short)
-        _rat = float(ratio_long)    if default_side == "LONG" else float(ratio_short)
-        chart_turbo_entry = round(chart_asml_entry / (_lev * _rat), 2) if _lev > 0 and _rat > 0 else 0.0
+        _fin = float(financing_long) if default_side == "LONG" else float(financing_short)
+        _rat = float(ratio_long)     if default_side == "LONG" else float(ratio_short)
+        if default_side == "LONG":
+            chart_turbo_entry = round((chart_asml_entry - _fin) / _rat, 2) if _rat > 0 else 0.0
+        else:
+            chart_turbo_entry = round((_fin - chart_asml_entry) / _rat, 2) if _rat > 0 else 0.0
         te_val.markdown(f"**€ {chart_turbo_entry:.2f}**")
 
         st.divider()
@@ -655,6 +657,7 @@ with sltp_col:
 
 # --- Right: Turbo Calculator — all values from main block + sidebar settings ---
 _calc_side        = default_side
+_calc_financing   = float(financing_long) if _calc_side == "LONG" else float(financing_short)
 _calc_turbo_price = chart_turbo_entry
 _calc_ratio       = float(ratio_long) if _calc_side == "LONG" else float(ratio_short)
 
@@ -678,22 +681,22 @@ with turbo_col:
             lc.markdown(f"**{label}**")
             rc.markdown(str(value))
 
-        # Compute turbo translation — alles gebaseerd op chart_asml_entry + leverage-afgeleide turbo
+        # Compute turbo translation — gebaseerd op financieringsniveau
         _dummy = {
             "side":  _calc_side,
             "entry": chart_asml_entry,
             "sl":    chart_sl,
             "tp":    chart_tp,
         }
-        result = TurboTranslator({"leverage": state["leverage"]}).translate(
+        result = TurboTranslator({}).translate(
             _dummy,
             asml_price=chart_asml_entry,
-            turbo_price=_calc_turbo_price,   # = chart_asml_entry / (leverage * ratio)
+            financing=_calc_financing,
             ratio=_calc_ratio,
         )
         turbo_sl_price = result.get("turbo_sl_price")
         turbo_tp_price = result.get("turbo_tp_price")
-        _financing     = result.get("financing")
+        _leverage_calc = result.get("leverage")
 
         st.divider()
 
@@ -706,10 +709,10 @@ with turbo_col:
             _tp_pct = (turbo_tp_price / _calc_turbo_price - 1) * 100 if _calc_turbo_price else 0.0
 
             for _lbl, _val in [
-                ("🔴 Turbo SL",  f"**€ {turbo_sl_price:.2f}**  *({_sl_pct:+.1f}% / −{_sl_d:.2f})*"),
-                ("🟢 Turbo TP",  f"**€ {turbo_tp_price:.2f}**  *({_tp_pct:+.1f}% / +{_tp_d:.2f})*"),
-                ("R/R",          f"**{_rr:.2f}**"),
-                ("Financiering", f"€ {_financing:.2f}"),
+                ("🔴 Turbo SL", f"**€ {turbo_sl_price:.2f}**  *({_sl_pct:+.1f}% / −{_sl_d:.2f})*"),
+                ("🟢 Turbo TP", f"**€ {turbo_tp_price:.2f}**  *({_tp_pct:+.1f}% / +{_tp_d:.2f})*"),
+                ("R/R",         f"**{_rr:.2f}**"),
+                ("Leverage",    f"{_leverage_calc:.2f}×" if _leverage_calc is not None else "—"),
             ]:
                 lc, rc = st.columns([1, 2])
                 lc.markdown(f"**{_lbl}**")
@@ -725,10 +728,10 @@ _prev_ratio       = _calc_ratio
 _prev_side        = _calc_side
 
 _dummy_chart = {"side": _prev_side, "entry": chart_asml_entry, "sl": chart_sl, "tp": chart_tp}
-_result_chart = TurboTranslator({"leverage": state["leverage"]}).translate(
+_result_chart = TurboTranslator({}).translate(
     _dummy_chart,
     asml_price=chart_asml_entry,
-    turbo_price=_prev_turbo_price,
+    financing=_calc_financing,
     ratio=_prev_ratio,
 )
 
