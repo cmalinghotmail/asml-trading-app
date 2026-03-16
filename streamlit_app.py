@@ -11,6 +11,7 @@ import time
 import sys
 import os
 import datetime
+import zoneinfo
 import pandas as pd
 import plotly.graph_objects as go
 
@@ -135,6 +136,7 @@ def _fetch_box_levels(ticker: str) -> dict | None:
 
     Weekend-afhandeling is automatisch: yfinance retourneert vrijdag als
     de meest recente completed trading day wanneer het weekend is.
+    Fetcht ook ASML Nasdaq prev-dag H/L (in USD + EUR) en de USD/EUR koers.
     """
     import yfinance as yf
     today = datetime.date.today()
@@ -153,7 +155,7 @@ def _fetch_box_levels(ticker: str) -> dict | None:
         row  = df.iloc[-1]
         high = round(float(row["High"]), 2)
         low  = round(float(row["Low"]),  2)
-        return {
+        result = {
             "date": df.index[-1].date().isoformat(),
             "high": high,
             "low":  low,
@@ -161,6 +163,35 @@ def _fetch_box_levels(ticker: str) -> dict | None:
         }
     except Exception:
         return None
+
+    # ASML Nasdaq prev-dag H/L + USD/EUR koers
+    try:
+        df_nas = yf.download("ASML", period="5d", interval="1d",
+                             auto_adjust=True, progress=False)
+        df_fx  = yf.download("EURUSD=X", period="2d", interval="1d",
+                             auto_adjust=True, progress=False)
+        if not df_nas.empty and not df_fx.empty:
+            if isinstance(df_nas.columns, pd.MultiIndex):
+                df_nas.columns = df_nas.columns.get_level_values(0)
+            if isinstance(df_fx.columns, pd.MultiIndex):
+                df_fx.columns = df_fx.columns.get_level_values(0)
+            if df_nas.index[-1].date() >= today:
+                df_nas = df_nas.iloc[:-1]
+            if not df_nas.empty:
+                nas_row  = df_nas.iloc[-1]
+                usd_eur  = round(1.0 / float(df_fx.iloc[-1]["Close"]), 6)
+                nh_usd   = round(float(nas_row["High"]), 2)
+                nl_usd   = round(float(nas_row["Low"]),  2)
+                result["nasdaq_high_usd"] = nh_usd
+                result["nasdaq_low_usd"]  = nl_usd
+                result["nasdaq_high_eur"] = round(nh_usd * usd_eur, 2)
+                result["nasdaq_low_eur"]  = round(nl_usd * usd_eur, 2)
+                result["nasdaq_mid_eur"]  = round((nh_usd + nl_usd) / 2 * usd_eur, 2)
+                result["usd_eur"]         = usd_eur
+    except Exception:
+        pass  # Nasdaq-data optioneel — Euronext box werkt zonder
+
+    return result
 
 
 def _render_box_zone(col, side, key_pfx, def_entry, def_sl, def_tp, fin, rat,
@@ -520,6 +551,42 @@ with st.container(border=True):
             _s_label = "  |  ".join(filter(None, [_t_short_name, _t_short_isin]))
             if _s_label:
                 st.caption(_s_label)
+
+    # Nasdaq referentieniveaus — alleen zichtbaar vanaf 15:30 CET
+    _now_cet    = datetime.datetime.now(tz=zoneinfo.ZoneInfo("Europe/Amsterdam"))
+    _show_ndq   = _now_cet.hour > 15 or (_now_cet.hour == 15 and _now_cet.minute >= 30)
+    _ndq_high   = (_box or {}).get("nasdaq_high_eur")
+    _ndq_low    = (_box or {}).get("nasdaq_low_eur")
+    _ndq_mid    = (_box or {}).get("nasdaq_mid_eur")
+    _ndq_h_usd  = (_box or {}).get("nasdaq_high_usd")
+    _ndq_l_usd  = (_box or {}).get("nasdaq_low_usd")
+    _usd_eur    = (_box or {}).get("usd_eur")
+
+    if _show_ndq and _ndq_high is not None:
+        st.caption(
+            f"🇺🇸 **Nasdaq referentie** (prev dag) &nbsp;·&nbsp; "
+            f"💱 USD/EUR: {_usd_eur:.4f} &nbsp;·&nbsp; "
+            f"Nasdaq: ${_ndq_l_usd:,.2f} / ${_ndq_h_usd:,.2f}"
+        )
+        _ndq_turbo_low  = round((_ndq_low  - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
+        _ndq_turbo_high = round((_fin_short - _ndq_high) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
+        _ndq_turbo_ml   = round((_ndq_mid   - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
+        _ndq_turbo_ms   = round((_fin_short - _ndq_mid)  / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
+        _nc_l, _nc_m, _nc_h = st.columns(3)
+        with _nc_l:
+            st.caption(f"🟢 Low: **€ {_ndq_low:,.2f}**")
+            if _ndq_turbo_low is not None:
+                st.caption(f"Turbo Long: **€ {_ndq_turbo_low:.2f}**")
+        with _nc_m:
+            st.caption(f"⚫ Mid: **€ {_ndq_mid:,.2f}**")
+            if _ndq_turbo_ml is not None:
+                st.caption(f"🟢 Long: **€ {_ndq_turbo_ml:.2f}**")
+            if _ndq_turbo_ms is not None:
+                st.caption(f"🔴 Short: **€ {_ndq_turbo_ms:.2f}**")
+        with _nc_h:
+            st.caption(f"🔴 High: **€ {_ndq_high:,.2f}**")
+            if _ndq_turbo_high is not None:
+                st.caption(f"Turbo Short: **€ {_ndq_turbo_high:.2f}**")
 
     st.divider()
 
