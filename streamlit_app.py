@@ -180,14 +180,17 @@ def _fetch_box_levels(ticker: str) -> dict | None:
             if not df_nas.empty:
                 nas_row  = df_nas.iloc[-1]
                 usd_eur  = round(1.0 / float(df_fx.iloc[-1]["Close"]), 6)
-                nh_usd   = round(float(nas_row["High"]), 2)
-                nl_usd   = round(float(nas_row["Low"]),  2)
-                result["nasdaq_high_usd"] = nh_usd
-                result["nasdaq_low_usd"]  = nl_usd
-                result["nasdaq_high_eur"] = round(nh_usd * usd_eur, 2)
-                result["nasdaq_low_eur"]  = round(nl_usd * usd_eur, 2)
-                result["nasdaq_mid_eur"]  = round((nh_usd + nl_usd) / 2 * usd_eur, 2)
-                result["usd_eur"]         = usd_eur
+                nh_usd   = round(float(nas_row["High"]),  2)
+                nl_usd   = round(float(nas_row["Low"]),   2)
+                nc_usd   = round(float(nas_row["Close"]), 2)
+                result["nasdaq_high_usd"]  = nh_usd
+                result["nasdaq_low_usd"]   = nl_usd
+                result["nasdaq_close_usd"] = nc_usd
+                result["nasdaq_high_eur"]  = round(nh_usd * usd_eur, 2)
+                result["nasdaq_low_eur"]   = round(nl_usd * usd_eur, 2)
+                result["nasdaq_mid_eur"]   = round((nh_usd + nl_usd) / 2 * usd_eur, 2)
+                result["nasdaq_close_eur"] = round(nc_usd * usd_eur, 2)
+                result["usd_eur"]          = usd_eur
     except Exception:
         pass  # Nasdaq-data optioneel — Euronext box werkt zonder
 
@@ -552,21 +555,29 @@ with st.container(border=True):
             if _s_label:
                 st.caption(_s_label)
 
-    # Nasdaq referentieniveaus — alleen zichtbaar vanaf 15:30 CET
+    # Nasdaq referentieniveaus
     _now_cet    = datetime.datetime.now(tz=zoneinfo.ZoneInfo("Europe/Amsterdam"))
-    _show_ndq   = _now_cet.hour > 15 or (_now_cet.hour == 15 and _now_cet.minute >= 30)
+    _show_ndq   = _now_cet.hour > 14 or (_now_cet.hour == 14 and _now_cet.minute >= 30)
     _ndq_high   = (_box or {}).get("nasdaq_high_eur")
     _ndq_low    = (_box or {}).get("nasdaq_low_eur")
     _ndq_mid    = (_box or {}).get("nasdaq_mid_eur")
+    _ndq_close  = (_box or {}).get("nasdaq_close_eur")
+    _ndq_c_usd  = (_box or {}).get("nasdaq_close_usd")
     _ndq_h_usd  = (_box or {}).get("nasdaq_high_usd")
     _ndq_l_usd  = (_box or {}).get("nasdaq_low_usd")
     _usd_eur    = (_box or {}).get("usd_eur")
 
+    # Prev-dag close: altijd zichtbaar (voorbeurs referentie)
+    if _ndq_close is not None:
+        st.caption(
+            f"🇺🇸 Nasdaq prev close: **€ {_ndq_close:,.2f}** "
+            f"&nbsp;(${_ndq_c_usd:,.2f} · USD/EUR: {_usd_eur:.4f})"
+        )
+
     if _show_ndq and _ndq_high is not None:
         st.caption(
-            f"🇺🇸 **Nasdaq referentie** (prev dag) &nbsp;·&nbsp; "
-            f"💱 USD/EUR: {_usd_eur:.4f} &nbsp;·&nbsp; "
-            f"Nasdaq: ${_ndq_l_usd:,.2f} / ${_ndq_h_usd:,.2f}"
+            f"🇺🇸 **Nasdaq H/L** (prev dag) &nbsp;·&nbsp; "
+            f"${_ndq_l_usd:,.2f} / ${_ndq_h_usd:,.2f}"
         )
         _ndq_turbo_low  = round((_ndq_low  - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
         _ndq_turbo_high = round((_fin_short - _ndq_high) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
