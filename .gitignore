@@ -11,9 +11,6 @@ env/
 dist/
 build/
 
-# Config met API keys — gebruik config.example.yaml als template
-config.yaml
-
 # Excel bestanden met koersdata (te groot / gevoelig)
 *.xlsx
 *.xls

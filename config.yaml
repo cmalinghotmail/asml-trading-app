@@ -1,0 +1,79 @@
+# Underlying symbol to monitor
+underlying_symbol: ASML.AS
+
+turbo:
+  leverage: 3.55
+  long_isin: "NL0000000000"
+  short_isin: "NL0000000001"
+  ratio: 100
+
+turbo_long:
+  name: "ASML Long 949"
+  isin: "NLBNPNL3EX12"
+  financing: 885.0
+  ratio: 100
+
+turbo_short:
+  name: "ASML Short 1,453.1"
+  isin: "NLBNPNL3FE71"
+  financing: 1570.0
+  ratio: 100
+
+# If `manual_turbo` is true the app will prompt at startup for a turbo
+# leverage value. Value must be between 3.00 and 4.00 and will be rounded
+# to two decimals. Press Enter to accept the `turbo.leverage` value instead.
+manual_turbo: false
+manual_turbo_price: false
+
+# If `gui_mode` is true, the app will show a simple tkinter GUI for local
+# testing. Set to false to use terminal prompts/CLI/env vars instead.
+gui_mode: true
+
+setups:
+  breakout:
+    lookback: 20
+    vol_ma: 20
+    vol_mult: 1.5
+    tp_ratio: 2.0
+  
+  morning_gap:
+    start: "08:05"
+    end: "09:00"
+    gap_min: 10.0
+    vol_min: 100      # productie: 5000
+    tp_ratio: 1.5
+    sl_buffer: 0.0
+    lookback: 5
+
+  morning_momentum:
+    start: "09:15"
+    end: "10:00"
+    vol_min: 100      # productie: 3000
+    n_confirm: 2
+    tp_ratio: 1.75
+    sl_lookback: 3
+
+  opening_range_break:
+    range_start: "08:05"
+    range_end: "08:20"
+    break_end: "08:45"
+    vol_min: 100      # productie: 5000
+    tp_ratio: 1.3
+    range_n_candles: 15
+
+  closing_reversion:
+    start: "16:00"
+    end: "16:25"
+    vol_min: 100      # productie: 3000
+    vwap_threshold: 10.0
+    sl_buffer: 4.0
+    tp_buffer: 2.0
+
+# Demo / quick-run options
+demo_setup: prev_day_box
+demo_prev_close: 1210.0
+demo_limit: 500
+demo_force_window: true
+
+# Phase flag: 'signals' or 'orders' (orders not implemented yet)
+phase: signals
