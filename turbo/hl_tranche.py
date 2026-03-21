@@ -555,7 +555,7 @@ def render_hl_tranche_tab(financing_long: float = 0.0, ratio_long: int = 100,
 
             n_turbos = st.slider(
                 "Aantal turbos",
-                min_value=10, max_value=500, step=10,
+                min_value=25, max_value=1000, step=25,
                 key="hl_n_turbos",
             )
 
