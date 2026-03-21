@@ -3,6 +3,20 @@
 ## Bij elke sessie
 - Lees altijd eerst het geheugenbestand: `C:\Users\cmali\.claude\projects\c--DEV-Prive-asml-trading-app\memory\MEMORY.md`
 
+## Backlog / openstaande taken
+
+### HA dashboard webpagina
+AppDaemon schrijft dagelijks om 06:00 een HTML rapport naar `/homeassistant/www/asml_rapport.html`.
+Het rapport is bereikbaar in de browser via `http://<tailscale-ip>/local/asml_rapport.html`,
+maar is nog **niet zichtbaar in het HA dashboard** vanwege:
+- HA Content Security Policy (CSP) blokkeert iframe-kaarten in Lovelace
+- Tailscale IP (`100.126.16.53`) geeft "verbinding geweigerd" vanuit HA-context
+
+Gebruiker zoekt zelf een oplossing via AppDaemon of alternatieve HA-integratie.
+Bestanden: `homeassistant/asml_rapport.py`, `homeassistant/apps.yaml`, `homeassistant/INSTALLATIE.md`
+
+---
+
 ## Na goedgekeurde wijzigingen
 - Maak altijd een git commit na wijzigingen die door de gebruiker zijn goedgekeurd.
 - Commit messages in het Nederlands.
