@@ -15,6 +15,15 @@ maar is nog **niet zichtbaar in het HA dashboard** vanwege:
 Gebruiker zoekt zelf een oplossing via AppDaemon of alternatieve HA-integratie.
 Bestanden: `homeassistant/asml_rapport.py`, `homeassistant/apps.yaml`, `homeassistant/INSTALLATIE.md`
 
+### Claude Code direct in HA laten werken
+Claude Code draait lokaal op de Windows-machine, maar de HA-server draait apart (via Tailscale).
+Openstaande vraag: hoe kan Claude Code bestanden op de HA-server lezen/schrijven en scripts triggeren?
+Mogelijke richtingen:
+- SSH-toegang tot HA via Tailscale (Advanced SSH add-on)
+- Samba/CIFS share van `/config/` map benaderen vanuit Windows
+- HA REST API gebruiken voor AppDaemon-triggers
+- VS Code Server (Studio Code Server add-on) als brug
+
 ---
 
 ## Na goedgekeurde wijzigingen
