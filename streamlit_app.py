@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.engine import TradingEngine
 from turbo.translate import TurboTranslator
+from turbo.hl_tranche import render_hl_tranche_tab
 
 
 # ---------------------------------------------------------------------------
@@ -487,353 +488,365 @@ if state["error_msg"]:
 
 st.divider()
 
-# ---------------------------------------------------------------------------
-# Box Strategie sectie
-# ---------------------------------------------------------------------------
-_box       = st.session_state.get("box_levels")
-_fin_long  = float(financing_long)
-_rat_long  = float(ratio_long)
-_fin_short = float(financing_short)
-_rat_short = float(ratio_short)
+_tab_monitor, _tab_tranche = st.tabs(["📦 Trading Monitor", "📊 H/L Tranche Strategie"])
 
-if _box:
-    _bd, _bh, _bl, _bm = _box["date"], _box["high"], _box["low"], _box["mid"]
-else:
-    _ref = state["current_price"] or float(state["prev_close"])
-    _bh  = round(_ref * 1.005, 2)
-    _bl  = round(_ref * 0.995, 2)
-    _bm  = round(_ref, 2)
-    _bd  = "—"
+with _tab_monitor:
+    # -------------------------------------------------------------------------
+    # Box Strategie sectie
+    # -------------------------------------------------------------------------
 
-with st.container(border=True):
-    # Titel + refresh
-    _btitle_col, _brefresh_col = st.columns([6, 1])
-    with _btitle_col:
-        st.markdown(f"**📦 Box strategie** &nbsp;&nbsp; Vorige dag: **{_bd}**")
-        if not _box:
-            st.caption("⚠️ Geen box data — druk op **🔄 Box data vernieuwen** in de zijbalk.")
-    with _brefresh_col:
-        if st.button("🔄", key="box_refresh_main", help="Box data vernieuwen"):
-            for _k in ["box_levels", "_box_ticker", "box_long_entry", "box_long_sl", "box_long_tp",
-                       "box_short_entry", "box_short_sl", "box_short_tp"]:
-                st.session_state.pop(_k, None)
-            st.rerun()
+    _box       = st.session_state.get("box_levels")
+    _fin_long  = float(financing_long)
+    _rat_long  = float(ratio_long)
+    _fin_short = float(financing_short)
+    _rat_short = float(ratio_short)
 
-    # Low | Mid | High in drie kolommen — turbo-waarden conditioneel eronder
-    _t_long_name  = st.session_state.get("turbo_long_name",  "")
-    _t_long_isin  = st.session_state.get("turbo_long_isin",  "")
-    _t_short_name = st.session_state.get("turbo_short_name", "")
-    _t_short_isin = st.session_state.get("turbo_short_isin", "")
-    _has_long_t   = bool(_t_long_name or _t_long_isin)
-    _has_short_t  = bool(_t_short_name or _t_short_isin)
+    if _box:
+        _bd, _bh, _bl, _bm = _box["date"], _box["high"], _box["low"], _box["mid"]
+    else:
+        _ref = state["current_price"] or float(state["prev_close"])
+        _bh  = round(_ref * 1.005, 2)
+        _bl  = round(_ref * 0.995, 2)
+        _bm  = round(_ref, 2)
+        _bd  = "—"
 
-    # Turbo prijs bij box-niveaus — berekend via financieringsniveau
-    _turbo_at_low  = round((_bl - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
-    _turbo_at_high = round((_fin_short - _bh) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
+    with st.container(border=True):
+        # Titel + refresh
+        _btitle_col, _brefresh_col = st.columns([6, 1])
+        with _btitle_col:
+            st.markdown(f"**📦 Box strategie** &nbsp;&nbsp; Vorige dag: **{_bd}**")
+            if not _box:
+                st.caption("⚠️ Geen box data — druk op **🔄 Box data vernieuwen** in de zijbalk.")
+        with _brefresh_col:
+            if st.button("🔄", key="box_refresh_main", help="Box data vernieuwen"):
+                for _k in ["box_levels", "_box_ticker", "box_long_entry", "box_long_sl", "box_long_tp",
+                           "box_short_entry", "box_short_sl", "box_short_tp"]:
+                    st.session_state.pop(_k, None)
+                st.rerun()
 
-    _col_l, _col_m, _col_h = st.columns(3)
-    with _col_l:
-        st.markdown(f"🟢 Low: **€ {_bl:,.2f}**")
-        if _turbo_at_low is not None:
-            st.markdown(f"Turbo Long: **€ {_turbo_at_low:.2f}**")
-            _l_label = "  |  ".join(filter(None, [_t_long_name, _t_long_isin]))
-            if _l_label:
-                st.caption(_l_label)
-    with _col_m:
-        st.markdown(f"⚫ Mid: **€ {_bm:,.2f}**")
-        _turbo_mid_long  = round((_bm - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
-        _turbo_mid_short = round((_fin_short - _bm) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
-        if _turbo_mid_long is not None:
-            st.markdown(f"🟢 Long: **€ {_turbo_mid_long:.2f}**")
-        if _turbo_mid_short is not None:
-            st.markdown(f"🔴 Short: **€ {_turbo_mid_short:.2f}**")
-    with _col_h:
-        st.markdown(f"🔴 High: **€ {_bh:,.2f}**")
-        if _turbo_at_high is not None:
-            st.markdown(f"Turbo Short: **€ {_turbo_at_high:.2f}**")
-            _s_label = "  |  ".join(filter(None, [_t_short_name, _t_short_isin]))
-            if _s_label:
-                st.caption(_s_label)
+        # Low | Mid | High in drie kolommen — turbo-waarden conditioneel eronder
+        _t_long_name  = st.session_state.get("turbo_long_name",  "")
+        _t_long_isin  = st.session_state.get("turbo_long_isin",  "")
+        _t_short_name = st.session_state.get("turbo_short_name", "")
+        _t_short_isin = st.session_state.get("turbo_short_isin", "")
+        _has_long_t   = bool(_t_long_name or _t_long_isin)
+        _has_short_t  = bool(_t_short_name or _t_short_isin)
 
-    # Nasdaq referentieniveaus
-    _now_cet    = datetime.datetime.now(tz=zoneinfo.ZoneInfo("Europe/Amsterdam"))
-    _show_ndq   = _now_cet.hour > 14 or (_now_cet.hour == 14 and _now_cet.minute >= 30)
-    _ndq_high   = (_box or {}).get("nasdaq_high_eur")
-    _ndq_low    = (_box or {}).get("nasdaq_low_eur")
-    _ndq_mid    = (_box or {}).get("nasdaq_mid_eur")
-    _ndq_close  = (_box or {}).get("nasdaq_close_eur")
-    _ndq_c_usd  = (_box or {}).get("nasdaq_close_usd")
-    _ndq_h_usd  = (_box or {}).get("nasdaq_high_usd")
-    _ndq_l_usd  = (_box or {}).get("nasdaq_low_usd")
-    _usd_eur    = (_box or {}).get("usd_eur")
+        # Turbo prijs bij box-niveaus — berekend via financieringsniveau
+        _turbo_at_low  = round((_bl - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
+        _turbo_at_high = round((_fin_short - _bh) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
 
-    # Prev-dag close: altijd zichtbaar (voorbeurs referentie)
-    if _ndq_close is not None:
-        st.caption(
-            f"🇺🇸 Nasdaq prev close: **€ {_ndq_close:,.2f}** "
-            f"&nbsp;(${_ndq_c_usd:,.2f} · USD/EUR: {_usd_eur:.4f})"
+        _col_l, _col_m, _col_h = st.columns(3)
+        with _col_l:
+            st.markdown(f"🟢 Low: **€ {_bl:,.2f}**")
+            if _turbo_at_low is not None:
+                st.markdown(f"Turbo Long: **€ {_turbo_at_low:.2f}**")
+                _l_label = "  |  ".join(filter(None, [_t_long_name, _t_long_isin]))
+                if _l_label:
+                    st.caption(_l_label)
+        with _col_m:
+            st.markdown(f"⚫ Mid: **€ {_bm:,.2f}**")
+            _turbo_mid_long  = round((_bm - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
+            _turbo_mid_short = round((_fin_short - _bm) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
+            if _turbo_mid_long is not None:
+                st.markdown(f"🟢 Long: **€ {_turbo_mid_long:.2f}**")
+            if _turbo_mid_short is not None:
+                st.markdown(f"🔴 Short: **€ {_turbo_mid_short:.2f}**")
+        with _col_h:
+            st.markdown(f"🔴 High: **€ {_bh:,.2f}**")
+            if _turbo_at_high is not None:
+                st.markdown(f"Turbo Short: **€ {_turbo_at_high:.2f}**")
+                _s_label = "  |  ".join(filter(None, [_t_short_name, _t_short_isin]))
+                if _s_label:
+                    st.caption(_s_label)
+
+        # Nasdaq referentieniveaus
+        _now_cet    = datetime.datetime.now(tz=zoneinfo.ZoneInfo("Europe/Amsterdam"))
+        _show_ndq   = _now_cet.hour > 14 or (_now_cet.hour == 14 and _now_cet.minute >= 30)
+        _ndq_high   = (_box or {}).get("nasdaq_high_eur")
+        _ndq_low    = (_box or {}).get("nasdaq_low_eur")
+        _ndq_mid    = (_box or {}).get("nasdaq_mid_eur")
+        _ndq_close  = (_box or {}).get("nasdaq_close_eur")
+        _ndq_c_usd  = (_box or {}).get("nasdaq_close_usd")
+        _ndq_h_usd  = (_box or {}).get("nasdaq_high_usd")
+        _ndq_l_usd  = (_box or {}).get("nasdaq_low_usd")
+        _usd_eur    = (_box or {}).get("usd_eur")
+
+        # Prev-dag close: altijd zichtbaar (voorbeurs referentie)
+        if _ndq_close is not None:
+            st.caption(
+                f"🇺🇸 Nasdaq prev close: **€ {_ndq_close:,.2f}** "
+                f"&nbsp;(${_ndq_c_usd:,.2f} · USD/EUR: {_usd_eur:.4f})"
+            )
+
+        if _show_ndq and _ndq_high is not None:
+            st.caption(
+                f"🇺🇸 **Nasdaq H/L** (prev dag) &nbsp;·&nbsp; "
+                f"${_ndq_l_usd:,.2f} / ${_ndq_h_usd:,.2f}"
+            )
+            _ndq_turbo_low  = round((_ndq_low  - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
+            _ndq_turbo_high = round((_fin_short - _ndq_high) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
+            _ndq_turbo_ml   = round((_ndq_mid   - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
+            _ndq_turbo_ms   = round((_fin_short - _ndq_mid)  / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
+            _nc_l, _nc_m, _nc_h = st.columns(3)
+            with _nc_l:
+                st.caption(f"🟢 Low: **€ {_ndq_low:,.2f}**")
+                if _ndq_turbo_low is not None:
+                    st.caption(f"Turbo Long: **€ {_ndq_turbo_low:.2f}**")
+            with _nc_m:
+                st.caption(f"⚫ Mid: **€ {_ndq_mid:,.2f}**")
+                if _ndq_turbo_ml is not None:
+                    st.caption(f"🟢 Long: **€ {_ndq_turbo_ml:.2f}**")
+                if _ndq_turbo_ms is not None:
+                    st.caption(f"🔴 Short: **€ {_ndq_turbo_ms:.2f}**")
+            with _nc_h:
+                st.caption(f"🔴 High: **€ {_ndq_high:,.2f}**")
+                if _ndq_turbo_high is not None:
+                    st.caption(f"Turbo Short: **€ {_ndq_turbo_high:.2f}**")
+
+        st.divider()
+
+        _rng       = max(_bh - _bl, 1.0)
+        _long_col, _short_col = st.columns(2, gap="small")
+
+        _render_box_zone(
+            _long_col, "LONG", "box_long",
+            def_entry=_bl,
+            def_sl=round(_bl - _rng * 0.15, 2),
+            def_tp=_bm,
+            fin=_fin_long, rat=_rat_long,
+            turbo_naam=st.session_state.get("turbo_long_name", ""),
+            turbo_isin=st.session_state.get("turbo_long_isin", ""),
         )
-
-    if _show_ndq and _ndq_high is not None:
-        st.caption(
-            f"🇺🇸 **Nasdaq H/L** (prev dag) &nbsp;·&nbsp; "
-            f"${_ndq_l_usd:,.2f} / ${_ndq_h_usd:,.2f}"
+        _render_box_zone(
+            _short_col, "SHORT", "box_short",
+            def_entry=_bh,
+            def_sl=round(_bh + _rng * 0.15, 2),
+            def_tp=_bm,
+            fin=_fin_short, rat=_rat_short,
+            turbo_naam=st.session_state.get("turbo_short_name", ""),
+            turbo_isin=st.session_state.get("turbo_short_isin", ""),
         )
-        _ndq_turbo_low  = round((_ndq_low  - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
-        _ndq_turbo_high = round((_fin_short - _ndq_high) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
-        _ndq_turbo_ml   = round((_ndq_mid   - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
-        _ndq_turbo_ms   = round((_fin_short - _ndq_mid)  / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
-        _nc_l, _nc_m, _nc_h = st.columns(3)
-        with _nc_l:
-            st.caption(f"🟢 Low: **€ {_ndq_low:,.2f}**")
-            if _ndq_turbo_low is not None:
-                st.caption(f"Turbo Long: **€ {_ndq_turbo_low:.2f}**")
-        with _nc_m:
-            st.caption(f"⚫ Mid: **€ {_ndq_mid:,.2f}**")
-            if _ndq_turbo_ml is not None:
-                st.caption(f"🟢 Long: **€ {_ndq_turbo_ml:.2f}**")
-            if _ndq_turbo_ms is not None:
-                st.caption(f"🔴 Short: **€ {_ndq_turbo_ms:.2f}**")
-        with _nc_h:
-            st.caption(f"🔴 High: **€ {_ndq_high:,.2f}**")
-            if _ndq_turbo_high is not None:
-                st.caption(f"Turbo Short: **€ {_ndq_turbo_high:.2f}**")
 
     st.divider()
 
-    _rng       = max(_bh - _bl, 1.0)
-    _long_col, _short_col = st.columns(2, gap="small")
+    # ---------------------------------------------------------------------------
+    # Chart prep — compute defaults and bounds
+    # ---------------------------------------------------------------------------
+    candles     = state["candle_history"]
+    last_signal = state["signals"][-1] if state["signals"] else None
+    cur_price   = state["current_price"] or float(state["prev_close"])
 
-    _render_box_zone(
-        _long_col, "LONG", "box_long",
-        def_entry=_bl,
-        def_sl=round(_bl - _rng * 0.15, 2),
-        def_tp=_bm,
-        fin=_fin_long, rat=_rat_long,
-        turbo_naam=st.session_state.get("turbo_long_name", ""),
-        turbo_isin=st.session_state.get("turbo_long_isin", ""),
-    )
-    _render_box_zone(
-        _short_col, "SHORT", "box_short",
-        def_entry=_bh,
-        def_sl=round(_bh + _rng * 0.15, 2),
-        def_tp=_bm,
-        fin=_fin_short, rat=_rat_short,
-        turbo_naam=st.session_state.get("turbo_short_name", ""),
-        turbo_isin=st.session_state.get("turbo_short_isin", ""),
-    )
+    default_entry = round(float(last_signal["entry"]), 2) if last_signal else round(cur_price, 2)
+    default_sl    = round(float(last_signal["sl"]), 2)    if last_signal else round(cur_price * 0.994, 2)
+    default_tp    = round(float(last_signal["tp"]), 2)    if last_signal else round(cur_price * 1.008, 2)
+    default_side  = last_signal.get("side", "LONG")       if last_signal else "LONG"
 
-st.divider()
+    # Wide fixed bounds — user can freely enter any ASML price level
+    ni_min = 100.0
+    ni_max = 9000.0
 
-# ---------------------------------------------------------------------------
-# Chart prep — compute defaults and bounds
-# ---------------------------------------------------------------------------
-candles     = state["candle_history"]
-last_signal = state["signals"][-1] if state["signals"] else None
-cur_price   = state["current_price"] or float(state["prev_close"])
+    # ---------------------------------------------------------------------------
+    # SL/TP table (left) + Turbo Calculator table (right) — side by side
+    # ---------------------------------------------------------------------------
+    sltp_col, turbo_col = st.columns([1, 1], gap="small")
 
-default_entry = round(float(last_signal["entry"]), 2) if last_signal else round(cur_price, 2)
-default_sl    = round(float(last_signal["sl"]), 2)    if last_signal else round(cur_price * 0.994, 2)
-default_tp    = round(float(last_signal["tp"]), 2)    if last_signal else round(cur_price * 1.008, 2)
-default_side  = last_signal.get("side", "LONG")       if last_signal else "LONG"
-
-# Wide fixed bounds — user can freely enter any ASML price level
-ni_min = 100.0
-ni_max = 9000.0
-
-# ---------------------------------------------------------------------------
-# SL/TP table (left) + Turbo Calculator table (right) — side by side
-# ---------------------------------------------------------------------------
-sltp_col, turbo_col = st.columns([1, 1], gap="small")
-
-# --- Left: compact SL/TP table ---
-with sltp_col:
-    with st.container(border=True):
-        # Header row
-        h_lbl, h_val = st.columns([1, 2])
-        h_lbl.markdown("**Niveau**")
-        h_val.markdown("**Prijs (EUR)**")
-        st.divider()
-
-        # ASML Entry row — primaire input; turbo entry wordt hieruit berekend
-        ae_lbl, ae_val = st.columns([1, 2])
-        ae_lbl.markdown("📍 **ASML Entry**")
-        with ae_val:
-            chart_asml_entry = st.number_input(
-                "ASML Entry",
-                min_value=ni_min,
-                max_value=ni_max,
-                value=default_entry,
-                step=0.5,
-                format="%.2f",
-                key="chart_asml_entry",
-                label_visibility="collapsed",
-            )
-
-        # Turbo entry row — berekend via financieringsniveau
-        te_lbl, te_val = st.columns([1, 2])
-        te_lbl.markdown("🔵 **Turbo entry**")
-        _fin = float(financing_long) if default_side == "LONG" else float(financing_short)
-        _rat = float(ratio_long)     if default_side == "LONG" else float(ratio_short)
-        if default_side == "LONG":
-            chart_turbo_entry = round((chart_asml_entry - _fin) / _rat, 2) if _rat > 0 else 0.0
-        else:
-            chart_turbo_entry = round((_fin - chart_asml_entry) / _rat, 2) if _rat > 0 else 0.0
-        te_val.markdown(f"**€ {chart_turbo_entry:.2f}**")
-
-        st.divider()
-
-        # SL row
-        sl_lbl, sl_val = st.columns([1, 2])
-        sl_lbl.markdown("🔴 **Stop Loss**")
-        with sl_val:
-            chart_sl = st.number_input(
-                "SL",
-                min_value=ni_min,
-                max_value=ni_max,
-                value=default_sl,
-                step=0.5,
-                format="%.2f",
-                key="chart_sl",
-                label_visibility="collapsed",
-            )
-        _sl_dist = chart_asml_entry - chart_sl
-        st.caption(f"Afstand entry: {_sl_dist:+.2f} EUR")
-
-        st.divider()
-
-        # TP row
-        tp_lbl, tp_val = st.columns([1, 2])
-        tp_lbl.markdown("🟢 **Take Profit**")
-        with tp_val:
-            chart_tp = st.number_input(
-                "TP",
-                min_value=ni_min,
-                max_value=ni_max,
-                value=default_tp,
-                step=0.5,
-                format="%.2f",
-                key="chart_tp",
-                label_visibility="collapsed",
-            )
-        _tp_dist = chart_tp - chart_asml_entry
-        st.caption(f"Afstand entry: {_tp_dist:+.2f} EUR")
-
-        # Signalen compact onder TP
-        if state["signals"]:
+    # --- Left: compact SL/TP table ---
+    with sltp_col:
+        with st.container(border=True):
+            # Header row
+            h_lbl, h_val = st.columns([1, 2])
+            h_lbl.markdown("**Niveau**")
+            h_val.markdown("**Prijs (EUR)**")
             st.divider()
-            st.markdown("**Signalen**")
-            for s in reversed(state["signals"][-5:]):
-                _s_icon = "🟢" if s.get("side") == "LONG" else "🔴"
-                _s_t = str(s.get("time", ""))[:16].replace("T", " ")
-                st.caption(
-                    f"{_s_icon} {_s_t} &nbsp; "
-                    f"E:{float(s['entry']):.0f} &nbsp;"
-                    f"SL:{float(s['sl']):.0f} &nbsp;"
-                    f"TP:{float(s['tp']):.0f}"
+
+            # ASML Entry row — primaire input; turbo entry wordt hieruit berekend
+            ae_lbl, ae_val = st.columns([1, 2])
+            ae_lbl.markdown("📍 **ASML Entry**")
+            with ae_val:
+                chart_asml_entry = st.number_input(
+                    "ASML Entry",
+                    min_value=ni_min,
+                    max_value=ni_max,
+                    value=default_entry,
+                    step=0.5,
+                    format="%.2f",
+                    key="chart_asml_entry",
+                    label_visibility="collapsed",
                 )
 
-# --- Right: Turbo Calculator — all values from main block + sidebar settings ---
-_calc_side        = default_side
-_calc_financing   = float(financing_long) if _calc_side == "LONG" else float(financing_short)
-_calc_turbo_price = chart_turbo_entry
-_calc_ratio       = float(ratio_long) if _calc_side == "LONG" else float(ratio_short)
+            # Turbo entry row — berekend via financieringsniveau
+            te_lbl, te_val = st.columns([1, 2])
+            te_lbl.markdown("🔵 **Turbo entry**")
+            _fin = float(financing_long) if default_side == "LONG" else float(financing_short)
+            _rat = float(ratio_long)     if default_side == "LONG" else float(ratio_short)
+            if default_side == "LONG":
+                chart_turbo_entry = round((chart_asml_entry - _fin) / _rat, 2) if _rat > 0 else 0.0
+            else:
+                chart_turbo_entry = round((_fin - chart_asml_entry) / _rat, 2) if _rat > 0 else 0.0
+            te_val.markdown(f"**€ {chart_turbo_entry:.2f}**")
 
-with turbo_col:
-    with st.container(border=True):
-        if _calc_side == "LONG":
-            _tname = st.session_state.get("turbo_long_name", "")
-            _tisin = st.session_state.get("turbo_long_isin", "")
-        else:
-            _tname = st.session_state.get("turbo_short_name", "")
-            _tisin = st.session_state.get("turbo_short_isin", "")
-        _product_label = "  |  ".join(filter(None, [_tname, _tisin]))
-        st.markdown(
-            f"**Turbo Calculator**"
-            f"{f'  —  {_product_label}' if _product_label else ''}"
-        )
+            st.divider()
 
-        def _drow(label, value):
-            """Render one display row: bold label | value."""
-            lc, rc = st.columns([1, 2])
-            lc.markdown(f"**{label}**")
-            rc.markdown(str(value))
+            # SL row
+            sl_lbl, sl_val = st.columns([1, 2])
+            sl_lbl.markdown("🔴 **Stop Loss**")
+            with sl_val:
+                chart_sl = st.number_input(
+                    "SL",
+                    min_value=ni_min,
+                    max_value=ni_max,
+                    value=default_sl,
+                    step=0.5,
+                    format="%.2f",
+                    key="chart_sl",
+                    label_visibility="collapsed",
+                )
+            _sl_dist = chart_asml_entry - chart_sl
+            st.caption(f"Afstand entry: {_sl_dist:+.2f} EUR")
 
-        # Compute turbo translation — gebaseerd op financieringsniveau
-        _dummy = {
-            "side":  _calc_side,
-            "entry": chart_asml_entry,
-            "sl":    chart_sl,
-            "tp":    chart_tp,
-        }
-        result = TurboTranslator({}).translate(
-            _dummy,
-            asml_price=chart_asml_entry,
-            financing=_calc_financing,
-            ratio=_calc_ratio,
-        )
-        turbo_sl_price = result.get("turbo_sl_price")
-        turbo_tp_price = result.get("turbo_tp_price")
-        _leverage_calc = result.get("leverage")
+            st.divider()
 
-        st.divider()
+            # TP row
+            tp_lbl, tp_val = st.columns([1, 2])
+            tp_lbl.markdown("🟢 **Take Profit**")
+            with tp_val:
+                chart_tp = st.number_input(
+                    "TP",
+                    min_value=ni_min,
+                    max_value=ni_max,
+                    value=default_tp,
+                    step=0.5,
+                    format="%.2f",
+                    key="chart_tp",
+                    label_visibility="collapsed",
+                )
+            _tp_dist = chart_tp - chart_asml_entry
+            st.caption(f"Afstand entry: {_tp_dist:+.2f} EUR")
 
-        # Result rows
-        if turbo_sl_price is not None:
-            _sl_d   = abs(_calc_turbo_price - turbo_sl_price)
-            _tp_d   = abs(turbo_tp_price - _calc_turbo_price)
-            _rr     = round(_tp_d / _sl_d, 2) if _sl_d > 0 else 0.0
-            _sl_pct = (turbo_sl_price / _calc_turbo_price - 1) * 100 if _calc_turbo_price else 0.0
-            _tp_pct = (turbo_tp_price / _calc_turbo_price - 1) * 100 if _calc_turbo_price else 0.0
+            # Signalen compact onder TP
+            if state["signals"]:
+                st.divider()
+                st.markdown("**Signalen**")
+                for s in reversed(state["signals"][-5:]):
+                    _s_icon = "🟢" if s.get("side") == "LONG" else "🔴"
+                    _s_t = str(s.get("time", ""))[:16].replace("T", " ")
+                    st.caption(
+                        f"{_s_icon} {_s_t} &nbsp; "
+                        f"E:{float(s['entry']):.0f} &nbsp;"
+                        f"SL:{float(s['sl']):.0f} &nbsp;"
+                        f"TP:{float(s['tp']):.0f}"
+                    )
 
-            for _lbl, _val in [
-                ("🔴 Turbo SL", f"**€ {turbo_sl_price:.2f}**  *({_sl_pct:+.1f}% / −{_sl_d:.2f})*"),
-                ("🟢 Turbo TP", f"**€ {turbo_tp_price:.2f}**  *({_tp_pct:+.1f}% / +{_tp_d:.2f})*"),
-                ("R/R",         f"**{_rr:.2f}**"),
-                ("Leverage",    f"{_leverage_calc:.2f}×" if _leverage_calc is not None else "—"),
-            ]:
+    # --- Right: Turbo Calculator — all values from main block + sidebar settings ---
+    _calc_side        = default_side
+    _calc_financing   = float(financing_long) if _calc_side == "LONG" else float(financing_short)
+    _calc_turbo_price = chart_turbo_entry
+    _calc_ratio       = float(ratio_long) if _calc_side == "LONG" else float(ratio_short)
+
+    with turbo_col:
+        with st.container(border=True):
+            if _calc_side == "LONG":
+                _tname = st.session_state.get("turbo_long_name", "")
+                _tisin = st.session_state.get("turbo_long_isin", "")
+            else:
+                _tname = st.session_state.get("turbo_short_name", "")
+                _tisin = st.session_state.get("turbo_short_isin", "")
+            _product_label = "  |  ".join(filter(None, [_tname, _tisin]))
+            st.markdown(
+                f"**Turbo Calculator**"
+                f"{f'  —  {_product_label}' if _product_label else ''}"
+            )
+
+            def _drow(label, value):
+                """Render one display row: bold label | value."""
                 lc, rc = st.columns([1, 2])
-                lc.markdown(f"**{_lbl}**")
-                rc.markdown(_val)
-        else:
-            st.info("Geen berekening mogelijk — controleer leverage en ratio.")
+                lc.markdown(f"**{label}**")
+                rc.markdown(str(value))
 
-# ---------------------------------------------------------------------------
-# Candlestick chart — full width, uses session_state turbo price for annotations
-# ---------------------------------------------------------------------------
-_prev_turbo_price = _calc_turbo_price
-_prev_ratio       = _calc_ratio
-_prev_side        = _calc_side
+            # Compute turbo translation — gebaseerd op financieringsniveau
+            _dummy = {
+                "side":  _calc_side,
+                "entry": chart_asml_entry,
+                "sl":    chart_sl,
+                "tp":    chart_tp,
+            }
+            result = TurboTranslator({}).translate(
+                _dummy,
+                asml_price=chart_asml_entry,
+                financing=_calc_financing,
+                ratio=_calc_ratio,
+            )
+            turbo_sl_price = result.get("turbo_sl_price")
+            turbo_tp_price = result.get("turbo_tp_price")
+            _leverage_calc = result.get("leverage")
 
-_dummy_chart = {"side": _prev_side, "entry": chart_asml_entry, "sl": chart_sl, "tp": chart_tp}
-_result_chart = TurboTranslator({}).translate(
-    _dummy_chart,
-    asml_price=chart_asml_entry,
-    financing=_calc_financing,
-    ratio=_prev_ratio,
-)
+            st.divider()
 
-fig = _build_chart(
-    candles=candles,
-    entry_val=chart_asml_entry,
-    sl_val=chart_sl,
-    tp_val=chart_tp,
-    signals=state["signals"],
-    turbo_sl=_result_chart.get("turbo_sl_price"),
-    turbo_tp=_result_chart.get("turbo_tp_price"),
-    turbo_entry=_prev_turbo_price,
-)
-if fig:
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-        config={
-            "editable": False,
-            "edits": {"shapePosition": True},
-        },
+            # Result rows
+            if turbo_sl_price is not None:
+                _sl_d   = abs(_calc_turbo_price - turbo_sl_price)
+                _tp_d   = abs(turbo_tp_price - _calc_turbo_price)
+                _rr     = round(_tp_d / _sl_d, 2) if _sl_d > 0 else 0.0
+                _sl_pct = (turbo_sl_price / _calc_turbo_price - 1) * 100 if _calc_turbo_price else 0.0
+                _tp_pct = (turbo_tp_price / _calc_turbo_price - 1) * 100 if _calc_turbo_price else 0.0
+
+                for _lbl, _val in [
+                    ("🔴 Turbo SL", f"**€ {turbo_sl_price:.2f}**  *({_sl_pct:+.1f}% / −{_sl_d:.2f})*"),
+                    ("🟢 Turbo TP", f"**€ {turbo_tp_price:.2f}**  *({_tp_pct:+.1f}% / +{_tp_d:.2f})*"),
+                    ("R/R",         f"**{_rr:.2f}**"),
+                    ("Leverage",    f"{_leverage_calc:.2f}×" if _leverage_calc is not None else "—"),
+                ]:
+                    lc, rc = st.columns([1, 2])
+                    lc.markdown(f"**{_lbl}**")
+                    rc.markdown(_val)
+            else:
+                st.info("Geen berekening mogelijk — controleer leverage en ratio.")
+
+    # ---------------------------------------------------------------------------
+    # Candlestick chart — full width, uses session_state turbo price for annotations
+    # ---------------------------------------------------------------------------
+    _prev_turbo_price = _calc_turbo_price
+    _prev_ratio       = _calc_ratio
+    _prev_side        = _calc_side
+
+    _dummy_chart = {"side": _prev_side, "entry": chart_asml_entry, "sl": chart_sl, "tp": chart_tp}
+    _result_chart = TurboTranslator({}).translate(
+        _dummy_chart,
+        asml_price=chart_asml_entry,
+        financing=_calc_financing,
+        ratio=_prev_ratio,
     )
-else:
-    st.info("Nog geen candle data. Druk **Start** in de zijbalk.")
+
+    fig = _build_chart(
+        candles=candles,
+        entry_val=chart_asml_entry,
+        sl_val=chart_sl,
+        tp_val=chart_tp,
+        signals=state["signals"],
+        turbo_sl=_result_chart.get("turbo_sl_price"),
+        turbo_tp=_result_chart.get("turbo_tp_price"),
+        turbo_entry=_prev_turbo_price,
+    )
+    if fig:
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            config={
+                "editable": False,
+                "edits": {"shapePosition": True},
+            },
+        )
+    else:
+        st.info("Nog geen candle data. Druk **Start** in de zijbalk.")
+
+with _tab_tranche:
+    render_hl_tranche_tab(
+        financing_long=float(financing_long),
+        ratio_long=int(ratio_long),
+        financing_short=float(financing_short),
+        ratio_short=int(ratio_short),
+    )
 
 # ---------------------------------------------------------------------------
 # Auto-refresh when engine is running
