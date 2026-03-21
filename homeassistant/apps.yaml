@@ -1,0 +1,5 @@
+# Voeg dit toe aan /config/appdaemon/apps/apps.yaml op je HA-server
+
+asml_rapport:
+  module: asml_rapport
+  class: ASMLRapport
