@@ -63,8 +63,7 @@ class ASMLRapport(hass.Hass):
 
     def initialize(self):
         self.run_daily(self.generate_rapport, datetime.time(6, 0, 0))
-        # Verwijder onderstaande commentaar om direct na herstart te testen:
-        # self.run_in(self.generate_rapport, 15)
+        self.run_in(self.generate_rapport, 15)  # TEST: verwijder na eerste succesvolle run
 
     def generate_rapport(self, kwargs):
         self.log("ASML Rapport: data ophalen...")
