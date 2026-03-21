@@ -526,9 +526,9 @@ def render_hl_tranche_tab(financing_long: float = 0.0, ratio_long: int = 100,
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # Pre-populeer Nasdaq slot vanuit box_levels indien beschikbaar
+    # Synchroniseer Nasdaq slot altijd vanuit box_levels (zelfde bron als Trading Monitor tab)
     _box = st.session_state.get("box_levels")
-    if _box and _box.get("nasdaq_close_eur") and not st.session_state.get("hl_nasdaq_slot"):
+    if _box and _box.get("nasdaq_close_eur"):
         st.session_state["hl_nasdaq_slot"] = float(_box["nasdaq_close_eur"])
 
     st.markdown("### H/L Tranche Strategie Calculator")
