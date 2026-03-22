@@ -155,7 +155,7 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-.block-container { padding-top: 0.5rem !important; }
+.block-container { padding-top: 2rem !important; }
 hr { margin: 0.3rem 0 !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -184,21 +184,27 @@ with st.sidebar:
     st.caption("Historisch dagrapport · localhost:8502")
     st.divider()
 
-    # Dagslider (1 = meest recent, 20 = oudst)
+    # Dagnavigatie — index in aparte session_state, slider zonder key
+    if "nav_idx" not in st.session_state:
+        st.session_state["nav_idx"] = 1
+
+    col_prev, col_next = st.columns(2)
+    if col_prev.button("◄ Ouder", key="nav_prev",
+                       disabled=st.session_state["nav_idx"] >= len(handelsdagen)):
+        st.session_state["nav_idx"] += 1
+        st.rerun()
+    if col_next.button("Nieuwer ►", key="nav_next",
+                       disabled=st.session_state["nav_idx"] <= 1):
+        st.session_state["nav_idx"] -= 1
+        st.rerun()
+
     dag_idx = st.slider(
         "Dag (1 = gisteren)",
         min_value=1,
         max_value=len(handelsdagen),
-        value=1,
-        key="dag_idx",
+        value=st.session_state["nav_idx"],
     )
-    col_prev, col_next = st.columns(2)
-    if col_prev.button("◄ Ouder", key="nav_prev", disabled=dag_idx >= len(handelsdagen)):
-        st.session_state["dag_idx"] = dag_idx + 1
-        st.rerun()
-    if col_next.button("Nieuwer ►", key="nav_next", disabled=dag_idx <= 1):
-        st.session_state["dag_idx"] = dag_idx - 1
-        st.rerun()
+    st.session_state["nav_idx"] = dag_idx  # slider en knoppen in sync houden
 
     st.divider()
     st.markdown("**Entry drempel** (% van spread boven PDL / onder PDH)")
