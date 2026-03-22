@@ -5,24 +5,15 @@
 
 ## Backlog / openstaande taken
 
-### HA dashboard webpagina
-AppDaemon schrijft dagelijks om 06:00 een HTML rapport naar `/homeassistant/www/asml_rapport.html`.
-Het rapport is bereikbaar in de browser via `http://<tailscale-ip>/local/asml_rapport.html`,
-maar is nog **niet zichtbaar in het HA dashboard** vanwege:
-- HA Content Security Policy (CSP) blokkeert iframe-kaarten in Lovelace
-- Tailscale IP (`100.126.16.53`) geeft "verbinding geweigerd" vanuit HA-context
+### 1. Gedeelde yfinance fetcher
+`streamlit_app.py`, `hl_tranche.py` en `yfinance_feed.py` hebben elk eigen MultiIndex-handling.
+Oplossing: `data/fetcher.py` met `fetch_daily()` en `fetch_intraday()`.
 
-Gebruiker zoekt zelf een oplossing via AppDaemon of alternatieve HA-integratie.
-Bestanden: `homeassistant/asml_rapport.py`, `homeassistant/apps.yaml`, `homeassistant/INSTALLATIE.md`
+### 2. Turbo-berekening centraliseren
+Formule staat op 3+ plekken. Altijd `TurboTranslator` gebruiken, `_turbo_prijs()` in `hl_tranche.py` verwijderen.
 
-### Claude Code direct in HA laten werken
-Claude Code draait lokaal op de Windows-machine, maar de HA-server draait apart (via Tailscale).
-Openstaande vraag: hoe kan Claude Code bestanden op de HA-server lezen/schrijven en scripts triggeren?
-Mogelijke richtingen:
-- SSH-toegang tot HA via Tailscale (Advanced SSH add-on)
-- Samba/CIFS share van `/config/` map benaderen vanuit Windows
-- HA REST API gebruiken voor AppDaemon-triggers
-- VS Code Server (Studio Code Server add-on) als brug
+### 3. Box strategy extraheren
+`_fetch_box_levels()` en `_render_box_zone()` uit `streamlit_app.py` naar `turbo/box_strategy.py`.
 
 ---
 
