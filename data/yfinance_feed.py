@@ -13,9 +13,9 @@ Buiten handelstijd geeft yfinance de laatste handelsdag terug.
 """
 
 import time
-import pandas as pd
 import pytz
-import yfinance as yf
+
+from data.fetcher import fetch_intraday
 
 POLL_INTERVAL = 60  # seconden tussen live polls
 CET = pytz.timezone("Europe/Amsterdam")
@@ -30,19 +30,9 @@ class YFinanceFeed:
 
     def _fetch(self) -> list:
         """Download 1-min candles voor vandaag. Geeft lijst van candle-dicts terug."""
-        df = yf.download(
-            self.ticker,
-            period="1d",
-            interval="1m",
-            auto_adjust=True,
-            progress=False,
-        )
-        if df.empty:
+        df = fetch_intraday(self.ticker)
+        if df is None:
             return []
-
-        # yfinance geeft soms MultiIndex kolommen: ('Close', 'ASML.AS') → 'Close'
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
 
         candles = []
         for ts, row in df.iterrows():

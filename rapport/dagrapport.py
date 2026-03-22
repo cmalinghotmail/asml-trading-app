@@ -11,7 +11,8 @@ import os
 import pandas as pd
 import pytz
 import streamlit as st
-import yfinance as yf
+
+from data.fetcher import fetch_daily, extract_prev_week_hl
 
 # ---------------------------------------------------------------------------
 # Constanten (geport vanuit homeassistant/asml_rapport.py)
@@ -135,14 +136,9 @@ def _fetch_data() -> dict:
     result = {"gegenereerd": datetime.datetime.now().strftime("%d-%m-%Y %H:%M")}
 
     # ASML Amsterdam — prev day + prev week
-    df = yf.download("ASML.AS", period="30d", interval="1d",
-                     auto_adjust=True, progress=False)
-    if df.empty:
+    df = fetch_daily("ASML.AS", period="30d")
+    if df is None:
         raise ValueError("Geen ASML.AS data van yfinance")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    if df.index[-1].date() >= today:
-        df = df.iloc[:-1]
 
     row = df.iloc[-1]
     result["pd_datum"] = str(df.index[-1].date())
@@ -150,33 +146,15 @@ def _fetch_data() -> dict:
     result["pd_low"]   = round(float(row["Low"]),   2)
     result["pd_close"] = round(float(row["Close"]), 2)
 
-    # Prev week H/L
-    df["iso_week"] = [d.isocalendar()[1] for d in df.index.date]
-    df["iso_year"] = [d.year             for d in df.index.date]
-    cur_week = today.isocalendar()[1]
-    cur_year = today.year
-    past = df[
-        (df["iso_year"] < cur_year) |
-        ((df["iso_year"] == cur_year) & (df["iso_week"] < cur_week))
-    ]
-    lw = past["iso_week"].iloc[-1]
-    ly = past["iso_year"].iloc[-1]
-    wd = past[(past["iso_week"] == lw) & (past["iso_year"] == ly)]
-    result["pw_week"] = int(lw)
-    result["pw_high"] = round(float(wd["High"].max()), 2)
-    result["pw_low"]  = round(float(wd["Low"].min()),  2)
+    pw = extract_prev_week_hl(df)
+    result["pw_high"] = pw["prev_week_high"]
+    result["pw_low"]  = pw["prev_week_low"]
 
     # Nasdaq + USD/EUR
-    df_nas = yf.download("ASML", period="5d", interval="1d",
-                         auto_adjust=True, progress=False)
-    df_fx  = yf.download("EURUSD=X", period="5d", interval="1d",
-                         auto_adjust=True, progress=False)
-    if isinstance(df_nas.columns, pd.MultiIndex):
-        df_nas.columns = df_nas.columns.get_level_values(0)
-    if isinstance(df_fx.columns, pd.MultiIndex):
-        df_fx.columns = df_fx.columns.get_level_values(0)
-    if df_nas.index[-1].date() >= today:
-        df_nas = df_nas.iloc[:-1]
+    df_nas = fetch_daily("ASML",     period="5d")
+    df_fx  = fetch_daily("EURUSD=X", period="5d", exclude_today=False)
+    if df_nas is None or df_fx is None:
+        raise ValueError("Geen Nasdaq of FX data van yfinance")
 
     nas_row = df_nas.iloc[-1]
     usd_eur = 1.0 / float(df_fx.iloc[-1]["Close"])

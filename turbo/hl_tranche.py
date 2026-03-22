@@ -10,7 +10,8 @@ import datetime
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-import yfinance as yf
+
+from data.fetcher import fetch_daily, extract_prev_week_hl
 
 # ---------------------------------------------------------------------------
 # Historische statistieken — 6 maanden Amsterdam bounce data
@@ -127,45 +128,16 @@ def _tranche_verdeling(n_totaal: int, n_tranches: int) -> list:
 
 def _fetch_hl_levels(ticker: str = "ASML.AS") -> dict:
     """Haal prev day H/L en prev week H/L op via yfinance."""
-    today = datetime.date.today()
     result = {}
     try:
-        df = yf.download(ticker, period="30d", interval="1d",
-                         auto_adjust=True, progress=False)
-        if df.empty:
+        df = fetch_daily(ticker, period="30d")
+        if df is None:
             return result
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        # Verwijder huidige (onvolledige) handelsdag
-        if df.index[-1].date() >= today:
-            df = df.iloc[:-1]
-        if df.empty:
-            return result
-
-        # Prev day H/L
         row = df.iloc[-1]
         result["prev_day_high"] = round(float(row["High"]), 2)
         result["prev_day_low"]  = round(float(row["Low"]),  2)
         result["prev_day_date"] = df.index[-1].date().isoformat()
-
-        # Prev week H/L — zoek de laatste volledig afgeronde handelsweek
-        df2 = df.copy()
-        df2["iso_week"] = [d.isocalendar()[1] for d in df2.index.date]
-        df2["iso_year"] = [d.year             for d in df2.index.date]
-        cur_week = today.isocalendar()[1]
-        cur_year = today.year
-        past = df2[
-            (df2["iso_year"] < cur_year) |
-            ((df2["iso_year"] == cur_year) & (df2["iso_week"] < cur_week))
-        ]
-        if not past.empty:
-            lw = past["iso_week"].iloc[-1]
-            ly = past["iso_year"].iloc[-1]
-            wd = past[(past["iso_week"] == lw) & (past["iso_year"] == ly)]
-            result["prev_week_high"]  = round(float(wd["High"].max()), 2)
-            result["prev_week_low"]   = round(float(wd["Low"].min()),  2)
-            result["prev_week_label"] = f"Week {lw}"
+        result.update(extract_prev_week_hl(df))
     except Exception:
         pass
     return result

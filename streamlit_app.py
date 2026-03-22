@@ -24,6 +24,7 @@ from backend.engine import TradingEngine
 from turbo.translate import TurboTranslator
 from turbo.hl_tranche import render_hl_tranche_tab
 from rapport.dagrapport import render_dagrapport_tab_pc, render_dagrapport_tab_mobiel
+from data.fetcher import fetch_daily
 
 
 # ---------------------------------------------------------------------------
@@ -140,19 +141,9 @@ def _fetch_box_levels(ticker: str) -> dict | None:
     de meest recente completed trading day wanneer het weekend is.
     Fetcht ook ASML Nasdaq prev-dag H/L (in USD + EUR) en de USD/EUR koers.
     """
-    import yfinance as yf
-    today = datetime.date.today()
     try:
-        df = yf.download(ticker, period="5d", interval="1d",
-                         auto_adjust=True, progress=False)
-        if df.empty:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        # Verwijder vandaag als die al in de data zit (partial trading day)
-        if df.index[-1].date() >= today:
-            df = df.iloc[:-1]
-        if df.empty:
+        df = fetch_daily(ticker, period="5d")
+        if df is None:
             return None
         row  = df.iloc[-1]
         high = round(float(row["High"]), 2)
@@ -168,31 +159,22 @@ def _fetch_box_levels(ticker: str) -> dict | None:
 
     # ASML Nasdaq prev-dag H/L + USD/EUR koers
     try:
-        df_nas = yf.download("ASML", period="5d", interval="1d",
-                             auto_adjust=True, progress=False)
-        df_fx  = yf.download("EURUSD=X", period="2d", interval="1d",
-                             auto_adjust=True, progress=False)
-        if not df_nas.empty and not df_fx.empty:
-            if isinstance(df_nas.columns, pd.MultiIndex):
-                df_nas.columns = df_nas.columns.get_level_values(0)
-            if isinstance(df_fx.columns, pd.MultiIndex):
-                df_fx.columns = df_fx.columns.get_level_values(0)
-            if df_nas.index[-1].date() >= today:
-                df_nas = df_nas.iloc[:-1]
-            if not df_nas.empty:
-                nas_row  = df_nas.iloc[-1]
-                usd_eur  = round(1.0 / float(df_fx.iloc[-1]["Close"]), 6)
-                nh_usd   = round(float(nas_row["High"]),  2)
-                nl_usd   = round(float(nas_row["Low"]),   2)
-                nc_usd   = round(float(nas_row["Close"]), 2)
-                result["nasdaq_high_usd"]  = nh_usd
-                result["nasdaq_low_usd"]   = nl_usd
-                result["nasdaq_close_usd"] = nc_usd
-                result["nasdaq_high_eur"]  = round(nh_usd * usd_eur, 2)
-                result["nasdaq_low_eur"]   = round(nl_usd * usd_eur, 2)
-                result["nasdaq_mid_eur"]   = round((nh_usd + nl_usd) / 2 * usd_eur, 2)
-                result["nasdaq_close_eur"] = round(nc_usd * usd_eur, 2)
-                result["usd_eur"]          = usd_eur
+        df_nas = fetch_daily("ASML",     period="5d")
+        df_fx  = fetch_daily("EURUSD=X", period="2d", exclude_today=False)
+        if df_nas is not None and df_fx is not None:
+            nas_row = df_nas.iloc[-1]
+            usd_eur = round(1.0 / float(df_fx.iloc[-1]["Close"]), 6)
+            nh_usd  = round(float(nas_row["High"]),  2)
+            nl_usd  = round(float(nas_row["Low"]),   2)
+            nc_usd  = round(float(nas_row["Close"]), 2)
+            result["nasdaq_high_usd"]  = nh_usd
+            result["nasdaq_low_usd"]   = nl_usd
+            result["nasdaq_close_usd"] = nc_usd
+            result["nasdaq_high_eur"]  = round(nh_usd * usd_eur, 2)
+            result["nasdaq_low_eur"]   = round(nl_usd * usd_eur, 2)
+            result["nasdaq_mid_eur"]   = round((nh_usd + nl_usd) / 2 * usd_eur, 2)
+            result["nasdaq_close_eur"] = round(nc_usd * usd_eur, 2)
+            result["usd_eur"]          = usd_eur
     except Exception:
         pass  # Nasdaq-data optioneel — Euronext box werkt zonder
 
