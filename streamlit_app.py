@@ -21,7 +21,7 @@ import streamlit as st
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.engine import TradingEngine
-from turbo.translate import TurboTranslator
+from turbo.translate import TurboTranslator, turbo_prijs
 from turbo.hl_tranche import render_hl_tranche_tab
 from rapport.dagrapport import render_dagrapport_tab_pc, render_dagrapport_tab_mobiel
 from data.fetcher import fetch_daily
@@ -521,8 +521,8 @@ with _tab_monitor:
         _has_short_t  = bool(_t_short_name or _t_short_isin)
 
         # Turbo prijs bij box-niveaus — berekend via financieringsniveau
-        _turbo_at_low  = round((_bl - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
-        _turbo_at_high = round((_fin_short - _bh) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
+        _turbo_at_low  = turbo_prijs(_bl, _fin_long,  _rat_long,  "LONG")  if _fin_long  > 0 else None
+        _turbo_at_high = turbo_prijs(_bh, _fin_short, _rat_short, "SHORT") if _fin_short > 0 else None
 
         _col_l, _col_m, _col_h = st.columns(3)
         with _col_l:
@@ -534,8 +534,8 @@ with _tab_monitor:
                     st.caption(_l_label)
         with _col_m:
             st.markdown(f"⚫ Mid: **€ {_bm:,.2f}**")
-            _turbo_mid_long  = round((_bm - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
-            _turbo_mid_short = round((_fin_short - _bm) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
+            _turbo_mid_long  = turbo_prijs(_bm, _fin_long,  _rat_long,  "LONG")  if _fin_long  > 0 else None
+            _turbo_mid_short = turbo_prijs(_bm, _fin_short, _rat_short, "SHORT") if _fin_short > 0 else None
             if _turbo_mid_long is not None:
                 st.markdown(f"🟢 Long: **€ {_turbo_mid_long:.2f}**")
             if _turbo_mid_short is not None:
@@ -572,10 +572,10 @@ with _tab_monitor:
                 f"🇺🇸 **Nasdaq H/L** (prev dag) &nbsp;·&nbsp; "
                 f"${_ndq_l_usd:,.2f} / ${_ndq_h_usd:,.2f}"
             )
-            _ndq_turbo_low  = round((_ndq_low  - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
-            _ndq_turbo_high = round((_fin_short - _ndq_high) / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
-            _ndq_turbo_ml   = round((_ndq_mid   - _fin_long)  / _rat_long,  2) if _rat_long  > 0 and _fin_long  > 0 else None
-            _ndq_turbo_ms   = round((_fin_short - _ndq_mid)  / _rat_short, 2) if _rat_short > 0 and _fin_short > 0 else None
+            _ndq_turbo_low  = turbo_prijs(_ndq_low,  _fin_long,  _rat_long,  "LONG")  if _fin_long  > 0 else None
+            _ndq_turbo_high = turbo_prijs(_ndq_high, _fin_short, _rat_short, "SHORT") if _fin_short > 0 else None
+            _ndq_turbo_ml   = turbo_prijs(_ndq_mid,  _fin_long,  _rat_long,  "LONG")  if _fin_long  > 0 else None
+            _ndq_turbo_ms   = turbo_prijs(_ndq_mid,  _fin_short, _rat_short, "SHORT") if _fin_short > 0 else None
             _nc_l, _nc_m, _nc_h = st.columns(3)
             with _nc_l:
                 st.caption(f"🟢 Low: **€ {_ndq_low:,.2f}**")
@@ -668,10 +668,7 @@ with _tab_monitor:
             te_lbl.markdown("🔵 **Turbo entry**")
             _fin = float(financing_long) if default_side == "LONG" else float(financing_short)
             _rat = float(ratio_long)     if default_side == "LONG" else float(ratio_short)
-            if default_side == "LONG":
-                chart_turbo_entry = round((chart_asml_entry - _fin) / _rat, 2) if _rat > 0 else 0.0
-            else:
-                chart_turbo_entry = round((_fin - chart_asml_entry) / _rat, 2) if _rat > 0 else 0.0
+            chart_turbo_entry = turbo_prijs(chart_asml_entry, _fin, _rat, default_side)
             te_val.markdown(f"**€ {chart_turbo_entry:.2f}**")
 
             st.divider()

@@ -1,3 +1,16 @@
+def turbo_prijs(asml_prijs: float, financiering: float, ratio: float, side: str) -> float:
+    """Bereken turbo prijs voor één ASML-niveau.
+
+    Gebruik dit voor losse prijsconversies (bijv. box-niveaus, entry-indicator).
+    Gebruik TurboTranslator.translate() voor volledige signalen met SL/TP en leverage.
+    """
+    if ratio <= 0:
+        return 0.0
+    if side == "LONG":
+        return round((asml_prijs - financiering) / ratio, 2)
+    return round((financiering - asml_prijs) / ratio, 2)
+
+
 class TurboTranslator:
     """Translate ASML SL/TP levels to turbo prices using financing level and ratio.
 

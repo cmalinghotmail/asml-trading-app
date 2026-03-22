@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from data.fetcher import fetch_daily, extract_prev_week_hl
+from turbo.translate import turbo_prijs
 
 # ---------------------------------------------------------------------------
 # Historische statistieken — 6 maanden Amsterdam bounce data
@@ -69,12 +70,6 @@ DEFAULT_SHORT = {
 # ---------------------------------------------------------------------------
 # Hulpfuncties — berekeningen
 # ---------------------------------------------------------------------------
-
-def _turbo_prijs(asml_prijs: float, financiering: float, ratio: float, mode: str) -> float:
-    if mode == "LONG":
-        return (asml_prijs - financiering) / ratio
-    return (financiering - asml_prijs) / ratio
-
 
 def _bounce_kleur(pct: float) -> str:
     if pct >= 70:
@@ -228,12 +223,12 @@ def _build_tranches(mode: str, asml_entry: float, asml_sl: float,
 
     candidates = candidates[:3]
     sizes = _tranche_verdeling(n_turbos, len(candidates))
-    turbo_ep = _turbo_prijs(asml_entry, financing, ratio, mode)
+    turbo_ep = turbo_prijs(asml_entry, financing, ratio, mode)
 
     tranches = []
     for i, (cand, size) in enumerate(zip(candidates, sizes)):
         doel = cand["asml_doel"]
-        turbo_doel = _turbo_prijs(doel, financing, ratio, mode)
+        turbo_doel = turbo_prijs(doel, financing, ratio, mode)
         winst_per = turbo_doel - turbo_ep
         afstand_pct = (
             (doel - asml_entry) / asml_entry * 100 if mode == "LONG"
@@ -439,7 +434,7 @@ def _render_nasdaq_signaal(nasdaq_slot, pdh, pdl, pwh, pwl):
 def _render_scenario(mode: str, asml_entry: float, asml_sl: float,
                      n_turbos: int, tranches: list,
                      financing: float, ratio: float):
-    turbo_ep = _turbo_prijs(asml_entry, financing, ratio, mode)
+    turbo_ep = turbo_prijs(asml_entry, financing, ratio, mode)
     totale_inleg = round(turbo_ep * n_turbos, 2)
     worst_case = -totale_inleg
 
@@ -554,7 +549,7 @@ def render_hl_tranche_tab(financing_long: float = 0.0, ratio_long: int = 100,
                 help="Knock-out drempel van de turbo",
             )
 
-            turbo_ep = _turbo_prijs(asml_entry, fin, rat, modus)
+            turbo_ep = turbo_prijs(asml_entry, fin, rat, modus)
             if modus == "LONG":
                 _lev = asml_entry / (asml_entry - fin) if (asml_entry - fin) > 0 else 0.0
             else:
