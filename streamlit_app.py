@@ -236,7 +236,7 @@ with st.sidebar:
         horizontal=True,
     )
 
-    if st.button("🔄 Box data vernieuwen", use_container_width=True, key="box_refresh_sidebar"):
+    if st.button("🔄 Box data vernieuwen", width="stretch", key="box_refresh_sidebar"):
         for _k in ["box_levels", "_box_ticker", "box_long_entry", "box_long_sl", "box_long_tp",
                    "box_short_entry", "box_short_sl", "box_short_tp"]:
             st.session_state.pop(_k, None)
@@ -277,13 +277,13 @@ with st.sidebar:
         start_clicked = st.button(
             "▶ Start",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             disabled=engine.is_running(),
         )
     with btn_col2:
         stop_clicked = st.button(
             "■ Stop",
-            use_container_width=True,
+            width="stretch",
             disabled=not engine.is_running(),
         )
 
@@ -696,7 +696,7 @@ with _tab_monitor:
     if fig:
         st.plotly_chart(
             fig,
-            use_container_width=True,
+            width="stretch",
             config={
                 "editable": False,
                 "edits": {"shapePosition": True},

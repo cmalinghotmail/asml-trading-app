@@ -570,7 +570,7 @@ def render_hl_tranche_tab(financing_long: float = 0.0, ratio_long: int = 100,
             with _lbl_col:
                 st.caption("Prev day/week H/L via yfinance ophalen:")
             with _btn_col:
-                if st.button("🔄 Ophalen", key="hl_fetch_btn", use_container_width=True):
+                if st.button("🔄 Ophalen", key="hl_fetch_btn", width="stretch"):
                     with st.spinner("Ophalen…"):
                         levels = _fetch_hl_levels("ASML.AS")
                     if levels:
@@ -748,7 +748,7 @@ def render_hl_tranche_tab(financing_long: float = 0.0, ratio_long: int = 100,
                 pdh=pdh_v, pdl=pdl_v, pwh=pwh_v, pwl=pwl_v,
                 nasdaq_open_verwacht=nasdaq_open_v,
             )
-            st.plotly_chart(fig, use_container_width=True, config={"editable": False})
+            st.plotly_chart(fig, width="stretch", config={"editable": False})
         else:
             st.info("Voer geldige H/L niveaus in om de prijsladder te tonen.")
 

@@ -387,7 +387,7 @@ def render_dagrapport_tab_pc() -> None:
         df = _niveautabel(data, a)
         st.dataframe(
             df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "Koers (€)": st.column_config.NumberColumn(format="€ %.2f"),
@@ -464,7 +464,7 @@ def render_dagrapport_tab_mobiel() -> None:
     df = _niveautabel(data, a)[["Niveau", "Koers (€)", "Bounce", "Afstand"]]
     st.dataframe(
         df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Koers (€)": st.column_config.NumberColumn(format="€ %.2f"),
