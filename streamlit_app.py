@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from backend.engine import TradingEngine
 from turbo.translate import TurboTranslator
 from turbo.hl_tranche import render_hl_tranche_tab
+from rapport.dagrapport import render_dagrapport_tab_pc, render_dagrapport_tab_mobiel
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +489,12 @@ if state["error_msg"]:
 
 st.divider()
 
-_tab_monitor, _tab_tranche = st.tabs(["📦 Trading Monitor", "📊 H/L Tranche Strategie"])
+_tab_monitor, _tab_tranche, _tab_rapport_pc, _tab_rapport_mob = st.tabs([
+    "📦 Trading Monitor",
+    "📊 H/L Tranche Strategie",
+    "📋 Dagrapport",
+    "📱 Dagrapport mobiel",
+])
 
 with _tab_monitor:
     # -------------------------------------------------------------------------
@@ -847,6 +853,12 @@ with _tab_tranche:
         financing_short=float(financing_short),
         ratio_short=int(ratio_short),
     )
+
+with _tab_rapport_pc:
+    render_dagrapport_tab_pc()
+
+with _tab_rapport_mob:
+    render_dagrapport_tab_mobiel()
 
 # ---------------------------------------------------------------------------
 # Auto-refresh when engine is running
